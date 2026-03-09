@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ title or "TrialTracker" }}</title>
+    <link
+      rel="icon"
+      type="image/png"
+      href="{{ url_for('static', filename='favicon.png') }}"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='styles.css') }}"
+    />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="app-header">
+        <div class="brand">
+          <div class="brand-mark">TT</div>
+          <div class="brand-copy">
+            <div class="brand-title">TrialTracker</div>
+            <div class="brand-subtitle">Stay ahead of surprise renewals</div>
+          </div>
+        </div>
+        <nav class="nav-actions">
+          <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">Dashboard</a>
+          <a href="{{ url_for('add_trial') }}" class="btn btn-primary">Add trial</a>
+        </nav>
+      </header>
+
+      <main class="app-main">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div class="flash-container">
+              {% for category, message in messages %}
+                <div class="flash flash-{{ category }}">
+                  <span>{{ message }}</span>
+                  <button
+                    type="button"
+                    class="flash-close"
+                    onclick="this.parentElement.remove()"
+                  >
+                    ×
+                  </button>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+      </main>
+
+      <footer class="app-footer">
+        <span>Built for individuals & small teams juggling SaaS trials.</span>
+      </footer>
+    </div>
+
+    <script>
+      function confirmDelete(formId) {
+        const ok = window.confirm(
+          "Delete this trial? This cannot be undone."
+        );
+        if (ok) {
+          document.getElementById(formId).submit();
+        }
+      }
+    </script>
+  </body>
+</html>
+

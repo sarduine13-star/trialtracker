@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="page-section">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Your active trials</h1>
+        <p class="page-lead">
+          Track free trials, see what renews next, and decide what to keep before it bills.
+        </p>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-label">Potential monthly spend if all trials convert</div>
+        <div class="metric-value">
+          ${{ "%.2f"|format(total_monthly_cost or 0) }}
+        </div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <a href="{{ url_for('add_trial') }}" class="btn btn-primary">Add trial</a>
+      </div>
+      <div class="toolbar-right">
+        <a href="{{ url_for('export_csv') }}" class="btn btn-ghost">
+          Export CSV
+        </a>
+      </div>
+    </div>
+
+    {% if not trials %}
+      <div class="empty-state card-centered">
+        <h2>No trials yet</h2>
+        <p>
+          Start by adding the free trials you’re currently on. We’ll track days remaining
+          and send you email reminders before anything renews.
+        </p>
+        <a href="{{ url_for('add_trial') }}" class="btn btn-primary">
+          Add your first trial
+        </a>
+      </div>
+    {% else %}
+      <div class="trials-grid">
+        {% for trial in trials %}
+          <article class="trial-card trial-{{ trial.urgency }}">
+            <header class="trial-header">
+              <div>
+                <h2 class="trial-title">{{ trial.product_name }}</h2>
+                {% if trial.vendor %}
+                  <div class="trial-vendor">{{ trial.vendor }}</div>
+                {% endif %}
+              </div>
+              <div class="trial-badge">
+                {% if trial.days_remaining < 0 %}
+                  <span class="badge badge-expired">Expired</span>
+                {% elif trial.days_remaining == 0 %}
+                  <span class="badge badge-critical">Renews today</span>
+                {% elif trial.days_remaining == 1 %}
+                  <span class="badge badge-critical">1 day left</span>
+                {% elif trial.days_remaining <= 7 %}
+                  <span class="badge badge-warning">{{ trial.days_remaining }} days left</span>
+                {% else %}
+                  <span class="badge badge-ok">{{ trial.days_remaining }} days left</span>
+                {% endif %}
+              </div>
+            </header>
+
+            <div class="trial-body">
+              <div class="trial-row">
+                <span class="label">Monthly cost if converted</span>
+                <span class="value">${{ "%.2f"|format(trial.monthly_cost) }}</span>
+              </div>
+              <div class="trial-row">
+                <span class="label">Trial ends</span>
+                <span class="value">
+                  {{ trial.trial_end_date.strftime("%b %d, %Y") if trial.trial_end_date else "" }}
+                </span>
+              </div>
+              {% if trial.notes %}
+                <div class="trial-notes">
+                  <span class="label">Notes</span>
+                  <p>{{ trial.notes }}</p>
+                </div>
+              {% endif %}
+            </div>
+
+            <footer class="trial-footer">
+              <a
+                href="{{ url_for('edit_trial', trial_id=trial.id) }}"
+                class="btn btn-ghost-sm"
+              >
+                Edit
+              </a>
+
+              <form
+                id="delete-form-{{ trial.id }}"
+                method="post"
+                action="{{ url_for('delete_trial', trial_id=trial.id) }}"
+              >
+                <button
+                  type="button"
+                  class="btn btn-danger-sm"
+                  onclick="confirmDelete('delete-form-{{ trial.id }}')"
+                >
+                  Delete
+                </button>
+              </form>
+            </footer>
+          </article>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}
+
