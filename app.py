@@ -1,33 +1,120 @@
-import os
 import csv
-import sqlite3
+import io
+import os
+import re
+import secrets
+import smtplib
 from datetime import date, datetime
+from email.message import EmailMessage
 from pathlib import Path
 
+from dotenv import load_dotenv
 from flask import (
     Flask,
+    abort,
+    flash,
+    redirect,
     render_template,
     request,
-    redirect,
-    url_for,
-    flash,
     send_file,
+    session,
+    url_for,
 )
+from flask_login import (
+    LoginManager,
+    UserMixin,
+    current_user,
+    login_required,
+    login_user,
+    logout_user,
+)
+from flask_sqlalchemy import SQLAlchemy
 from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.security import check_password_hash, generate_password_hash
 
+load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "trialtracker.db"
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+db = SQLAlchemy()
+login_manager = LoginManager()
+login_manager.login_view = "login"
+login_manager.login_message = "Please log in to continue."
+login_manager.login_message_category = "error"
+
+
+class User(db.Model, UserMixin):
+    __tablename__ = "users"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    email = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    password_hash = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    trials = db.relationship(
+        "Trial", backref="user", lazy=True, cascade="all, delete-orphan"
+    )
+
+    def set_password(self, password: str) -> None:
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password: str) -> bool:
+        return check_password_hash(self.password_hash, password)
+
+
+class Trial(db.Model):
+    __tablename__ = "trials"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
+    )
+    product_name = db.Column(db.String(200), nullable=False)
+    vendor = db.Column(db.String(200))
+    monthly_cost = db.Column(db.Float, nullable=False)
+    trial_end_date = db.Column(db.String(10), nullable=False)  # YYYY-MM-DD
+    notes = db.Column(db.Text)
+    reminder_7_sent = db.Column(db.Boolean, nullable=False, default=False)
+    reminder_1_sent = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return db.session.get(User, int(user_id))
 
 
 def create_app():
     app = Flask(__name__)
     app.wsgi_app = ProxyFix(app.wsgi_app)  # type: ignore[assignment]
 
-    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-me")
-    app.config["DATABASE"] = str(DB_PATH)
+    flask_env = os.environ.get("FLASK_ENV", "production")
 
-    # Email configuration (SMTP or SendGrid SMTP)
+    secret_key = os.environ.get("SECRET_KEY")
+    if not secret_key:
+        if flask_env == "development":
+            secret_key = "dev-secret-change-me"
+        else:
+            raise RuntimeError(
+                "SECRET_KEY environment variable must be set (FLASK_ENV is not "
+                "'development')."
+            )
+    app.config["SECRET_KEY"] = secret_key
+
+    database_url = os.environ.get("DATABASE_URL", "").strip()
+    if database_url:
+        if database_url.startswith("postgres://"):
+            database_url = database_url.replace("postgres://", "postgresql://", 1)
+        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True}
+    else:
+        database_url = f"sqlite:///{DB_PATH}"
+    app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+    # Email configuration (SMTP or SendGrid SMTP) - set by the operator only.
     app.config["MAIL_HOST"] = os.environ.get("MAIL_HOST", "")
     app.config["MAIL_PORT"] = int(os.environ.get("MAIL_PORT", "587"))
     app.config["MAIL_USE_TLS"] = os.environ.get("MAIL_USE_TLS", "true").lower() == "true"
@@ -37,134 +124,118 @@ def create_app():
 
     app.config["REMINDER_TASK_TOKEN"] = os.environ.get("REMINDER_TASK_TOKEN", "")
 
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["SESSION_COOKIE_SECURE"] = flask_env != "development"
+
+    db.init_app(app)
+    login_manager.init_app(app)
+
     with app.app_context():
-        init_db()
+        db.create_all()
 
     register_routes(app)
     return app
 
 
-def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
-def init_db():
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    # Settings table for single-user onboarding
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS settings (
-            id INTEGER PRIMARY KEY CHECK (id = 1),
-            owner_name TEXT NOT NULL,
-            owner_email TEXT NOT NULL,
-            created_at TEXT NOT NULL
-        )
-        """
-    )
-
-    # Trials table
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS trials (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            product_name TEXT NOT NULL,
-            vendor TEXT,
-            monthly_cost REAL NOT NULL,
-            trial_end_date TEXT NOT NULL,
-            notes TEXT,
-            reminder_7_sent INTEGER NOT NULL DEFAULT 0,
-            reminder_1_sent INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT NOT NULL
-        )
-        """
-    )
-
-    conn.commit()
-    conn.close()
-
-
-def load_settings():
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT id, owner_name, owner_email FROM settings WHERE id = 1")
-    row = cur.fetchone()
-    conn.close()
-    return row
+def normalize_email(raw_email: str) -> str:
+    return raw_email.strip().lower()
 
 
 def register_routes(app: Flask) -> None:
     @app.before_request
-    def ensure_onboarding():
-        # Allow setup and static assets before onboarding is complete
-        if request.endpoint in {"setup", "static"}:
-            return None
-
-        settings = load_settings()
-        if settings is None:
-            return redirect(url_for("setup"))
-        return None
-
-    @app.route("/setup", methods=["GET", "POST"])
-    def setup():
+    def csrf_protect():
         if request.method == "POST":
-            owner_name = request.form.get("owner_name", "").strip()
-            owner_email = request.form.get("owner_email", "").strip()
+            token = session.get("_csrf_token")
+            submitted = request.form.get("csrf_token")
+            if not token or not submitted or not secrets.compare_digest(token, submitted):
+                abort(400, description="Invalid or missing CSRF token.")
 
-            if not owner_name or not owner_email:
-                flash("Name and email are required.", "error")
-                return render_template("setup.html", title="Welcome to TrialTracker")
+    def get_csrf_token() -> str:
+        if "_csrf_token" not in session:
+            session["_csrf_token"] = secrets.token_hex(32)
+        return session["_csrf_token"]
 
-            conn = get_db_connection()
-            cur = conn.cursor()
-            cur.execute("DELETE FROM settings")
-            cur.execute(
-                """
-                INSERT INTO settings (id, owner_name, owner_email, created_at)
-                VALUES (1, ?, ?, ?)
-                """,
-                (owner_name, owner_email, datetime.utcnow().isoformat()),
-            )
-            conn.commit()
-            conn.close()
+    app.jinja_env.globals["csrf_token"] = get_csrf_token
 
-            flash("You're all set! Add your first trial.", "success")
+    @app.route("/register", methods=["GET", "POST"])
+    def register():
+        if current_user.is_authenticated:
             return redirect(url_for("dashboard"))
 
-        return render_template("setup.html", title="Welcome to TrialTracker")
+        if request.method == "POST":
+            name = request.form.get("name", "").strip()
+            email = normalize_email(request.form.get("email", ""))
+            password = request.form.get("password", "")
+
+            error = None
+            if not name:
+                error = "Name is required."
+            elif not email or not EMAIL_RE.match(email):
+                error = "A valid email is required."
+            elif len(password) < 8:
+                error = "Password must be at least 8 characters."
+            elif User.query.filter_by(email=email).first() is not None:
+                error = "An account with that email already exists."
+
+            if error:
+                flash(error, "error")
+                return render_template(
+                    "register.html", title="Create your account", name=name, email=email
+                )
+
+            user = User(name=name, email=email)
+            user.set_password(password)
+            db.session.add(user)
+            db.session.commit()
+
+            login_user(user)
+            flash("Welcome! Add your first trial to get started.", "success")
+            return redirect(url_for("dashboard"))
+
+        return render_template("register.html", title="Create your account")
+
+    @app.route("/login", methods=["GET", "POST"])
+    def login():
+        if current_user.is_authenticated:
+            return redirect(url_for("dashboard"))
+
+        if request.method == "POST":
+            email = normalize_email(request.form.get("email", ""))
+            password = request.form.get("password", "")
+
+            user = User.query.filter_by(email=email).first()
+            if user is None or not user.check_password(password):
+                flash("Invalid email or password.", "error")
+                return render_template("login.html", title="Log in", email=email)
+
+            login_user(user)
+            flash(f"Welcome back, {user.name}.", "success")
+            return redirect(url_for("dashboard"))
+
+        return render_template("login.html", title="Log in")
+
+    @app.route("/logout", methods=["POST"])
+    @login_required
+    def logout():
+        logout_user()
+        flash("Logged out.", "success")
+        return redirect(url_for("login"))
 
     @app.route("/")
+    @login_required
     def dashboard():
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT
-                id,
-                product_name,
-                vendor,
-                monthly_cost,
-                trial_end_date,
-                notes,
-                created_at
-            FROM trials
-            """
-        )
-        rows = cur.fetchall()
-        conn.close()
+        rows = Trial.query.filter_by(user_id=current_user.id).all()
 
         trials = []
         total_monthly_cost = 0.0
         today = date.today()
 
         for row in rows:
-            end_date = datetime.strptime(row["trial_end_date"], "%Y-%m-%d").date()
+            end_date = datetime.strptime(row.trial_end_date, "%Y-%m-%d").date()
             days_remaining = (end_date - today).days
 
-            total_monthly_cost += float(row["monthly_cost"])
+            total_monthly_cost += float(row.monthly_cost)
 
             if days_remaining < 0:
                 urgency = "expired"
@@ -177,13 +248,13 @@ def register_routes(app: Flask) -> None:
 
             trials.append(
                 {
-                    "id": row["id"],
-                    "product_name": row["product_name"],
-                    "vendor": row["vendor"],
-                    "monthly_cost": float(row["monthly_cost"]),
+                    "id": row.id,
+                    "product_name": row.product_name,
+                    "vendor": row.vendor,
+                    "monthly_cost": float(row.monthly_cost),
                     "trial_end_date": end_date,
                     "days_remaining": days_remaining,
-                    "notes": row["notes"],
+                    "notes": row.notes,
                     "urgency": urgency,
                 }
             )
@@ -198,58 +269,62 @@ def register_routes(app: Flask) -> None:
             total_monthly_cost=total_monthly_cost,
         )
 
+    def _validate_trial_form(existing_cost=None):
+        product_name = request.form.get("product_name", "").strip()
+        vendor = request.form.get("vendor", "").strip()
+        monthly_cost = request.form.get("monthly_cost", "").strip()
+        trial_end_date = request.form.get("trial_end_date", "").strip()
+        notes = request.form.get("notes", "").strip()
+
+        error = None
+        if not product_name:
+            error = "Product name is required."
+        elif not monthly_cost:
+            error = "Monthly cost is required."
+        elif not trial_end_date:
+            error = "Trial end date is required."
+
+        try:
+            monthly_cost_value = float(monthly_cost)
+        except ValueError:
+            error = "Monthly cost must be a number."
+            monthly_cost_value = existing_cost if existing_cost is not None else 0.0
+
+        try:
+            datetime.strptime(trial_end_date, "%Y-%m-%d").date()
+        except ValueError:
+            error = "Trial end date must be a valid date (YYYY-MM-DD)."
+
+        return {
+            "product_name": product_name,
+            "vendor": vendor,
+            "monthly_cost": monthly_cost,
+            "monthly_cost_value": monthly_cost_value,
+            "trial_end_date": trial_end_date,
+            "notes": notes,
+            "error": error,
+        }
+
     @app.route("/trials/add", methods=["GET", "POST"])
+    @login_required
     def add_trial():
         if request.method == "POST":
-            product_name = request.form.get("product_name", "").strip()
-            vendor = request.form.get("vendor", "").strip()
-            monthly_cost = request.form.get("monthly_cost", "").strip()
-            trial_end_date = request.form.get("trial_end_date", "").strip()
-            notes = request.form.get("notes", "").strip()
+            form = _validate_trial_form()
 
-            error = None
-            if not product_name:
-                error = "Product name is required."
-            elif not monthly_cost:
-                error = "Monthly cost is required."
-            elif not trial_end_date:
-                error = "Trial end date is required."
-
-            try:
-                monthly_cost_value = float(monthly_cost)
-            except ValueError:
-                error = "Monthly cost must be a number."
-                monthly_cost_value = 0.0
-
-            try:
-                datetime.strptime(trial_end_date, "%Y-%m-%d").date()
-            except ValueError:
-                error = "Trial end date must be a valid date (YYYY-MM-DD)."
-
-            if error:
-                flash(error, "error")
+            if form["error"]:
+                flash(form["error"], "error")
                 return render_template("add_edit_trial.html", title="Add Trial")
 
-            conn = get_db_connection()
-            cur = conn.cursor()
-            cur.execute(
-                """
-                INSERT INTO trials (
-                    product_name, vendor, monthly_cost, trial_end_date, notes, created_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    product_name,
-                    vendor,
-                    monthly_cost_value,
-                    trial_end_date,
-                    notes,
-                    datetime.utcnow().isoformat(),
-                ),
+            trial = Trial(
+                user_id=current_user.id,
+                product_name=form["product_name"],
+                vendor=form["vendor"],
+                monthly_cost=form["monthly_cost_value"],
+                trial_end_date=form["trial_end_date"],
+                notes=form["notes"],
             )
-            conn.commit()
-            conn.close()
+            db.session.add(trial)
+            db.session.commit()
 
             flash("Trial added.", "success")
             return redirect(url_for("dashboard"))
@@ -257,146 +332,96 @@ def register_routes(app: Flask) -> None:
         return render_template("add_edit_trial.html", title="Add Trial")
 
     @app.route("/trials/<int:trial_id>/edit", methods=["GET", "POST"])
+    @login_required
     def edit_trial(trial_id: int):
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT id, product_name, vendor, monthly_cost, trial_end_date, notes FROM trials WHERE id = ?",
-            (trial_id,),
-        )
-        row = cur.fetchone()
-
-        if row is None:
-            conn.close()
-            flash("Trial not found.", "error")
-            return redirect(url_for("dashboard"))
+        trial = Trial.query.filter_by(id=trial_id, user_id=current_user.id).first()
+        if trial is None:
+            abort(404)
 
         if request.method == "POST":
-            product_name = request.form.get("product_name", "").strip()
-            vendor = request.form.get("vendor", "").strip()
-            monthly_cost = request.form.get("monthly_cost", "").strip()
-            trial_end_date = request.form.get("trial_end_date", "").strip()
-            notes = request.form.get("notes", "").strip()
+            form = _validate_trial_form(existing_cost=trial.monthly_cost)
 
-            error = None
-            if not product_name:
-                error = "Product name is required."
-            elif not monthly_cost:
-                error = "Monthly cost is required."
-            elif not trial_end_date:
-                error = "Trial end date is required."
-
-            try:
-                monthly_cost_value = float(monthly_cost)
-            except ValueError:
-                error = "Monthly cost must be a number."
-                monthly_cost_value = float(row["monthly_cost"])
-
-            try:
-                datetime.strptime(trial_end_date, "%Y-%m-%d").date()
-            except ValueError:
-                error = "Trial end date must be a valid date (YYYY-MM-DD)."
-
-            if error:
-                flash(error, "error")
-                conn.close()
+            if form["error"]:
+                flash(form["error"], "error")
                 return render_template(
                     "add_edit_trial.html",
                     title="Edit Trial",
                     trial={
-                        "id": row["id"],
-                        "product_name": product_name or row["product_name"],
-                        "vendor": vendor or row["vendor"],
-                        "monthly_cost": monthly_cost or row["monthly_cost"],
-                        "trial_end_date": trial_end_date or row["trial_end_date"],
-                        "notes": notes or row["notes"],
+                        "id": trial.id,
+                        "product_name": form["product_name"] or trial.product_name,
+                        "vendor": form["vendor"] or trial.vendor,
+                        "monthly_cost": form["monthly_cost"] or trial.monthly_cost,
+                        "trial_end_date": form["trial_end_date"] or trial.trial_end_date,
+                        "notes": form["notes"] or trial.notes,
                     },
                 )
 
-            cur.execute(
-                """
-                UPDATE trials
-                SET product_name = ?, vendor = ?, monthly_cost = ?, trial_end_date = ?, notes = ?
-                WHERE id = ?
-                """,
-                (
-                    product_name,
-                    vendor,
-                    monthly_cost_value,
-                    trial_end_date,
-                    notes,
-                    trial_id,
-                ),
-            )
-            conn.commit()
-            conn.close()
+            trial.product_name = form["product_name"]
+            trial.vendor = form["vendor"]
+            trial.monthly_cost = form["monthly_cost_value"]
+            trial.trial_end_date = form["trial_end_date"]
+            trial.notes = form["notes"]
+            db.session.commit()
 
             flash("Trial updated.", "success")
             return redirect(url_for("dashboard"))
 
-        trial = {
-            "id": row["id"],
-            "product_name": row["product_name"],
-            "vendor": row["vendor"],
-            "monthly_cost": row["monthly_cost"],
-            "trial_end_date": row["trial_end_date"],
-            "notes": row["notes"],
-        }
-        conn.close()
-
-        return render_template("add_edit_trial.html", title="Edit Trial", trial=trial)
+        return render_template(
+            "add_edit_trial.html",
+            title="Edit Trial",
+            trial={
+                "id": trial.id,
+                "product_name": trial.product_name,
+                "vendor": trial.vendor,
+                "monthly_cost": trial.monthly_cost,
+                "trial_end_date": trial.trial_end_date,
+                "notes": trial.notes,
+            },
+        )
 
     @app.route("/trials/<int:trial_id>/delete", methods=["POST"])
+    @login_required
     def delete_trial(trial_id: int):
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("DELETE FROM trials WHERE id = ?", (trial_id,))
-        conn.commit()
-        conn.close()
+        trial = Trial.query.filter_by(id=trial_id, user_id=current_user.id).first()
+        if trial is None:
+            abort(404)
+
+        db.session.delete(trial)
+        db.session.commit()
         flash("Trial deleted.", "success")
         return redirect(url_for("dashboard"))
 
     @app.route("/export/csv")
+    @login_required
     def export_csv():
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT product_name, vendor, monthly_cost, trial_end_date, notes, created_at
-            FROM trials
-            ORDER BY trial_end_date ASC
-            """
+        rows = (
+            Trial.query.filter_by(user_id=current_user.id)
+            .order_by(Trial.trial_end_date.asc())
+            .all()
         )
-        rows = cur.fetchall()
-        conn.close()
 
-        output_path = BASE_DIR / "trials_export.csv"
-        with output_path.open("w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
+        text_buffer = io.StringIO()
+        writer = csv.writer(text_buffer)
+        writer.writerow(
+            ["Product", "Vendor", "Monthly Cost", "Trial End Date", "Notes", "Created At"]
+        )
+        for row in rows:
             writer.writerow(
                 [
-                    "Product",
-                    "Vendor",
-                    "Monthly Cost",
-                    "Trial End Date",
-                    "Notes",
-                    "Created At",
+                    row.product_name,
+                    row.vendor,
+                    row.monthly_cost,
+                    row.trial_end_date,
+                    row.notes,
+                    row.created_at.isoformat() if row.created_at else "",
                 ]
             )
-            for row in rows:
-                writer.writerow(
-                    [
-                        row["product_name"],
-                        row["vendor"],
-                        row["monthly_cost"],
-                        row["trial_end_date"],
-                        row["notes"],
-                        row["created_at"],
-                    ]
-                )
+
+        mem_buffer = io.BytesIO(text_buffer.getvalue().encode("utf-8"))
+        mem_buffer.seek(0)
 
         return send_file(
-            output_path,
+            mem_buffer,
             mimetype="text/csv",
             as_attachment=True,
             download_name="trials.csv",
@@ -406,7 +431,7 @@ def register_routes(app: Flask) -> None:
     def run_reminders():
         expected_token = app.config.get("REMINDER_TASK_TOKEN") or ""
         provided = request.args.get("token", "")
-        if not expected_token or provided != expected_token:
+        if not expected_token or not secrets.compare_digest(provided, expected_token):
             return "Unauthorized", 401
 
         sent = send_due_reminders(app)
@@ -414,44 +439,22 @@ def register_routes(app: Flask) -> None:
 
 
 def send_due_reminders(app: Flask) -> int:
-    import smtplib
-    from email.message import EmailMessage
-
-    conn = get_db_connection()
-    cur = conn.cursor()
-
     today = date.today()
-    today_str = today.strftime("%Y-%m-%d")
 
-    # Trials exactly 7 or 1 days away that haven't had that reminder yet
-    cur.execute(
-        """
-        SELECT id, product_name, vendor, monthly_cost, trial_end_date,
-               reminder_7_sent, reminder_1_sent
-        FROM trials
-        """
-    )
-    rows = cur.fetchall()
-
-    settings = load_settings()
-    if settings is None:
-        conn.close()
-        return 0
-
-    owner_name = settings["owner_name"]
-    owner_email = settings["owner_email"]
+    candidates = Trial.query.filter(
+        db.or_(Trial.reminder_7_sent.is_(False), Trial.reminder_1_sent.is_(False))
+    ).all()
 
     to_send = []
-    for row in rows:
-        end_date = datetime.strptime(row["trial_end_date"], "%Y-%m-%d").date()
+    for trial in candidates:
+        end_date = datetime.strptime(trial.trial_end_date, "%Y-%m-%d").date()
         days_remaining = (end_date - today).days
-        if days_remaining == 7 and not row["reminder_7_sent"]:
-            to_send.append((row, 7))
-        elif days_remaining == 1 and not row["reminder_1_sent"]:
-            to_send.append((row, 1))
+        if days_remaining == 7 and not trial.reminder_7_sent:
+            to_send.append((trial, 7))
+        elif days_remaining == 1 and not trial.reminder_1_sent:
+            to_send.append((trial, 1))
 
     if not to_send:
-        conn.close()
         return 0
 
     host = app.config.get("MAIL_HOST")
@@ -462,54 +465,63 @@ def send_due_reminders(app: Flask) -> int:
     from_email = app.config.get("MAIL_FROM") or username
 
     if not host or not from_email:
-        conn.close()
+        return 0
+
+    try:
+        smtp = smtplib.SMTP(host, port)
+    except Exception:
         return 0
 
     sent_count = 0
     try:
-        with smtplib.SMTP(host, port) as smtp:
-            if use_tls:
-                smtp.starttls()
-            if username and password:
-                smtp.login(username, password)
+        if use_tls:
+            smtp.starttls()
+        if username and password:
+            smtp.login(username, password)
 
-            for row, days in to_send:
-                msg = EmailMessage()
-                subject = f"Trial ending in {days} day{'s' if days != 1 else ''}: {row['product_name']}"
-                msg["Subject"] = subject
-                msg["From"] = from_email
-                msg["To"] = owner_email
+        for trial, days in to_send:
+            owner = trial.user
+            if owner is None:
+                continue
 
-                lines = [
-                    f"Hi {owner_name},",
-                    "",
-                    f"Your trial for {row['product_name']} is ending in {days} day{'s' if days != 1 else ''}.",
-                    f"Vendor: {row['vendor'] or 'N/A'}",
-                    f"Monthly cost if converted: ${row['monthly_cost']:.2f}",
-                    f"Trial end date: {row['trial_end_date']}",
-                    "",
-                    "Decide whether to keep, cancel, or downgrade so you’re not surprised by charges.",
-                    "",
-                    "— TrialTracker",
-                ]
-                msg.set_content("\n".join(lines))
+            msg = EmailMessage()
+            subject = f"Trial ending in {days} day{'s' if days != 1 else ''}: {trial.product_name}"
+            msg["Subject"] = subject
+            msg["From"] = from_email
+            msg["To"] = owner.email
+
+            lines = [
+                f"Hi {owner.name},",
+                "",
+                f"Your trial for {trial.product_name} is ending in {days} day{'s' if days != 1 else ''}.",
+                f"Vendor: {trial.vendor or 'N/A'}",
+                f"Monthly cost if converted: ${trial.monthly_cost:.2f}",
+                f"Trial end date: {trial.trial_end_date}",
+                "",
+                "Decide whether to keep, cancel, or downgrade so you're not surprised by charges.",
+                "",
+                "— TrialTracker",
+            ]
+            msg.set_content("\n".join(lines))
+
+            try:
                 smtp.send_message(msg)
-                sent_count += 1
+            except Exception:
+                # This user's send failed; leave their reminder flag unset so it
+                # retries next run, and continue on to the remaining users.
+                continue
 
-                if days == 7:
-                    cur.execute(
-                        "UPDATE trials SET reminder_7_sent = 1 WHERE id = ?",
-                        (row["id"],),
-                    )
-                elif days == 1:
-                    cur.execute(
-                        "UPDATE trials SET reminder_1_sent = 1 WHERE id = ?",
-                        (row["id"],),
-                    )
-
-        conn.commit()
+            if days == 7:
+                trial.reminder_7_sent = True
+            else:
+                trial.reminder_1_sent = True
+            db.session.commit()
+            sent_count += 1
     finally:
-        conn.close()
+        try:
+            smtp.quit()
+        except Exception:
+            pass
 
     return sent_count
 
@@ -519,4 +531,3 @@ app = create_app()
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", "5000")))
-

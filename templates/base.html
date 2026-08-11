@@ -25,8 +25,21 @@
           </div>
         </div>
         <nav class="nav-actions">
-          <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">Dashboard</a>
-          <a href="{{ url_for('add_trial') }}" class="btn btn-primary">Add trial</a>
+          {% if current_user.is_authenticated %}
+            <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">Dashboard</a>
+            <a href="{{ url_for('add_trial') }}" class="btn btn-primary">Add trial</a>
+            <form
+              method="post"
+              action="{{ url_for('logout') }}"
+              style="display: inline; margin: 0;"
+            >
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+              <button type="submit" class="btn btn-ghost">Logout</button>
+            </form>
+          {% else %}
+            <a href="{{ url_for('login') }}" class="btn btn-ghost">Log in</a>
+            <a href="{{ url_for('register') }}" class="btn btn-primary">Sign up</a>
+          {% endif %}
         </nav>
       </header>
 
