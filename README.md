@@ -16,7 +16,7 @@ It's a free multi-user hosted app: anyone can create an account, add their own S
 ### 1. Prerequisites
 
 - **Python 3.10+**
-- An SMTP provider (SendGrid, Gmail with app password, or any SMTP account)
+- A SendGrid account (reminders send via SendGrid's HTTPS Mail Send API, not SMTP — outbound SMTP is blocked on many hosting plans, including Railway's free/hobby tier)
 
 ### 2. Setup (local)
 
@@ -48,7 +48,7 @@ It's a free multi-user hosted app: anyone can create an account, add their own S
 
    - **SECRET_KEY**: any long random string.
    - **DATABASE_URL**: optional locally — leave unset to use a local SQLite file (`trialtracker.db`), or point at Postgres to match production.
-   - **MAIL_HOST / MAIL_PORT / MAIL_USE_TLS / MAIL_USERNAME / MAIL_PASSWORD / MAIL_FROM** for your SMTP or SendGrid account (operator-configured; individual users never see or set these).
+   - **SENDGRID_API_KEY / MAIL_FROM** for your SendGrid account (operator-configured; individual users never see or set these).
    - **REMINDER_TASK_TOKEN**: generate a long random token (used to secure the reminder endpoint).
 
 5. **Run the app**:
@@ -92,19 +92,19 @@ Reminders go to the **notification email** you entered during setup.
 
 #### How reminders are triggered
 
-The app exposes a small internal task endpoint:
+The app exposes a small internal task endpoint, authenticated with a bearer token header (not a query string, so it never appears in URLs or logs):
 
-- `GET /tasks/run-reminders?token=YOUR_REMINDER_TASK_TOKEN`
+- `GET /tasks/run-reminders` with header `Authorization: Bearer YOUR_REMINDER_TASK_TOKEN`
 
 When this endpoint is called:
 
 - It checks the database for trials that are exactly 7 or 1 days from expiry.
-- It sends emails for any that have not yet received that specific reminder.
+- It sends emails (via SendGrid's HTTPS API) for any that have not yet received that specific reminder.
 - It marks the reminder as sent so you don’t get duplicates.
 
 To run reminders automatically:
 
-- Use a **cron job**, **Railway scheduled task**, **Replit cron**, or an external uptime monitor to hit this URL once per day.
+- Use a **cron job**, **Railway scheduled task**, **Replit cron**, or an external uptime monitor to hit this URL once per day with the `Authorization: Bearer` header set.
 
 ### 6. Deploying to Railway
 
@@ -113,7 +113,7 @@ To run reminders automatically:
 3. **Add a Postgres database** to the project (Railway → New → Database → PostgreSQL). Railway automatically injects `DATABASE_URL` into your service — you don't need to set it by hand.
 4. Set the remaining environment variables in the **Variables** tab:
    - `SECRET_KEY` — long random string. Required; the app refuses to start without it unless `FLASK_ENV=development`.
-   - `MAIL_HOST`, `MAIL_PORT`, `MAIL_USE_TLS`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`
+   - `SENDGRID_API_KEY`, `MAIL_FROM`
    - `REMINDER_TASK_TOKEN` — long random token
    - `FLASK_ENV=production` (or leave unset — production is the default)
 5. Railway installs from `requirements.txt` (including `psycopg2-binary` for Postgres) and starts the app via `Procfile` / `railway.json`:
@@ -124,7 +124,7 @@ To run reminders automatically:
 
 6. Configure a **Railway Cron** (or external scheduler) to call once per day:
 
-   - `https://your-railway-domain/tasks/run-reminders?token=REMINDER_TASK_TOKEN`
+   - `GET https://your-railway-domain/tasks/run-reminders` with header `Authorization: Bearer REMINDER_TASK_TOKEN`
 
 ### 7. Deploying to Replit
 
@@ -132,7 +132,7 @@ To run reminders automatically:
 2. Upload all files from this folder into the Replit project.
 3. In Replit’s **Secrets** panel, add:
    - `SECRET_KEY`
-   - `MAIL_HOST`, `MAIL_PORT`, `MAIL_USE_TLS`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`
+   - `SENDGRID_API_KEY`, `MAIL_FROM`
    - `REMINDER_TASK_TOKEN`
 4. Make sure the run command is something like:
 
@@ -142,7 +142,7 @@ To run reminders automatically:
 
 5. Use an external scheduler (like cron or a ping service) to call:
 
-   - `https://your-replit-url/tasks/run-reminders?token=REMINDER_TASK_TOKEN`
+   - `GET https://your-replit-url/tasks/run-reminders` with header `Authorization: Bearer REMINDER_TASK_TOKEN`
 
 ### 8. Data & storage
 
@@ -158,6 +158,6 @@ To run reminders automatically:
 - `SECRET_KEY` has no insecure default outside of `FLASK_ENV=development` — production refuses to start without it.
 - Session cookies are `HttpOnly`, `SameSite=Lax`, and `Secure` outside of development.
 - POST requests require a per-session CSRF token embedded in each form.
-- The `/tasks/run-reminders` endpoint requires the `REMINDER_TASK_TOKEN` as a query parameter and is never rendered into any page HTML.
-- Keep your `.env` file and SMTP/database credentials private — never commit them.
+- The `/tasks/run-reminders` endpoint requires the `REMINDER_TASK_TOKEN` as an `Authorization: Bearer` header (never a query string), and the token is never rendered into any page HTML.
+- Keep your `.env` file and SendGrid/database credentials private — never commit them.
 

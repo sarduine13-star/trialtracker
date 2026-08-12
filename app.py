@@ -1,11 +1,12 @@
 import csv
 import io
+import json
 import os
 import re
 import secrets
-import smtplib
+import urllib.error
+import urllib.request
 from datetime import date, datetime
-from email.message import EmailMessage
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -114,12 +115,8 @@ def create_app():
     app.config["SQLALCHEMY_DATABASE_URI"] = database_url
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-    # Email configuration (SMTP or SendGrid SMTP) - set by the operator only.
-    app.config["MAIL_HOST"] = os.environ.get("MAIL_HOST", "")
-    app.config["MAIL_PORT"] = int(os.environ.get("MAIL_PORT", "587"))
-    app.config["MAIL_USE_TLS"] = os.environ.get("MAIL_USE_TLS", "true").lower() == "true"
-    app.config["MAIL_USERNAME"] = os.environ.get("MAIL_USERNAME", "")
-    app.config["MAIL_PASSWORD"] = os.environ.get("MAIL_PASSWORD", "")
+    # Email configuration (SendGrid HTTPS Mail Send API) - set by the operator only.
+    app.config["SENDGRID_API_KEY"] = os.environ.get("SENDGRID_API_KEY", "")
     app.config["MAIL_FROM"] = os.environ.get("MAIL_FROM", "")
 
     app.config["REMINDER_TASK_TOKEN"] = os.environ.get("REMINDER_TASK_TOKEN", "")
@@ -430,12 +427,36 @@ def register_routes(app: Flask) -> None:
     @app.route("/tasks/run-reminders")
     def run_reminders():
         expected_token = app.config.get("REMINDER_TASK_TOKEN") or ""
-        provided = request.args.get("token", "")
-        if not expected_token or not secrets.compare_digest(provided, expected_token):
+        auth_header = request.headers.get("Authorization", "")
+        provided = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+        if not expected_token or not provided or not secrets.compare_digest(provided, expected_token):
             return "Unauthorized", 401
 
         sent = send_due_reminders(app)
         return {"sent": sent}
+
+
+def send_via_sendgrid(api_key: str, from_email: str, to_email: str, subject: str, body: str) -> int:
+    payload = json.dumps(
+        {
+            "personalizations": [{"to": [{"email": to_email}]}],
+            "from": {"email": from_email},
+            "subject": subject,
+            "content": [{"type": "text/plain", "value": body}],
+        }
+    ).encode("utf-8")
+
+    req = urllib.request.Request(
+        "https://api.sendgrid.com/v3/mail/send",
+        data=payload,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        return resp.status
 
 
 def send_due_reminders(app: Flask) -> int:
@@ -457,71 +478,49 @@ def send_due_reminders(app: Flask) -> int:
     if not to_send:
         return 0
 
-    host = app.config.get("MAIL_HOST")
-    port = app.config.get("MAIL_PORT")
-    use_tls = app.config.get("MAIL_USE_TLS", True)
-    username = app.config.get("MAIL_USERNAME")
-    password = app.config.get("MAIL_PASSWORD")
-    from_email = app.config.get("MAIL_FROM") or username
+    api_key = app.config.get("SENDGRID_API_KEY")
+    from_email = app.config.get("MAIL_FROM")
 
-    if not host or not from_email:
-        return 0
-
-    try:
-        smtp = smtplib.SMTP(host, port)
-    except Exception:
+    if not api_key or not from_email:
         return 0
 
     sent_count = 0
-    try:
-        if use_tls:
-            smtp.starttls()
-        if username and password:
-            smtp.login(username, password)
+    for trial, days in to_send:
+        owner = trial.user
+        if owner is None:
+            continue
 
-        for trial, days in to_send:
-            owner = trial.user
-            if owner is None:
-                continue
+        subject = f"Trial ending in {days} day{'s' if days != 1 else ''}: {trial.product_name}"
+        lines = [
+            f"Hi {owner.name},",
+            "",
+            f"Your trial for {trial.product_name} is ending in {days} day{'s' if days != 1 else ''}.",
+            f"Vendor: {trial.vendor or 'N/A'}",
+            f"Monthly cost if converted: ${trial.monthly_cost:.2f}",
+            f"Trial end date: {trial.trial_end_date}",
+            "",
+            "Decide whether to keep, cancel, or downgrade so you're not surprised by charges.",
+            "",
+            "— TrialTracker",
+        ]
+        body = "\n".join(lines)
 
-            msg = EmailMessage()
-            subject = f"Trial ending in {days} day{'s' if days != 1 else ''}: {trial.product_name}"
-            msg["Subject"] = subject
-            msg["From"] = from_email
-            msg["To"] = owner.email
-
-            lines = [
-                f"Hi {owner.name},",
-                "",
-                f"Your trial for {trial.product_name} is ending in {days} day{'s' if days != 1 else ''}.",
-                f"Vendor: {trial.vendor or 'N/A'}",
-                f"Monthly cost if converted: ${trial.monthly_cost:.2f}",
-                f"Trial end date: {trial.trial_end_date}",
-                "",
-                "Decide whether to keep, cancel, or downgrade so you're not surprised by charges.",
-                "",
-                "— TrialTracker",
-            ]
-            msg.set_content("\n".join(lines))
-
-            try:
-                smtp.send_message(msg)
-            except Exception:
-                # This user's send failed; leave their reminder flag unset so it
-                # retries next run, and continue on to the remaining users.
-                continue
-
-            if days == 7:
-                trial.reminder_7_sent = True
-            else:
-                trial.reminder_1_sent = True
-            db.session.commit()
-            sent_count += 1
-    finally:
         try:
-            smtp.quit()
+            status = send_via_sendgrid(api_key, from_email, owner.email, subject, body)
         except Exception:
-            pass
+            # This user's send failed; leave their reminder flag unset so it
+            # retries next run, and continue on to the remaining users.
+            continue
+
+        if status not in (200, 201, 202):
+            continue
+
+        if days == 7:
+            trial.reminder_7_sent = True
+        else:
+            trial.reminder_1_sent = True
+        db.session.commit()
+        sent_count += 1
 
     return sent_count
 
