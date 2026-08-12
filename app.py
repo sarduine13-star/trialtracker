@@ -115,8 +115,8 @@ def create_app():
     app.config["SQLALCHEMY_DATABASE_URI"] = database_url
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-    # Email configuration (SendGrid HTTPS Mail Send API) - set by the operator only.
-    app.config["SENDGRID_API_KEY"] = os.environ.get("SENDGRID_API_KEY", "")
+    # Email configuration (Resend HTTPS API) - set by the operator only.
+    app.config["RESEND_API_KEY"] = os.environ.get("RESEND_API_KEY", "")
     app.config["MAIL_FROM"] = os.environ.get("MAIL_FROM", "")
 
     app.config["REMINDER_TASK_TOKEN"] = os.environ.get("REMINDER_TASK_TOKEN", "")
@@ -436,23 +436,24 @@ def register_routes(app: Flask) -> None:
         return {"sent": sent}
 
 
-def send_via_sendgrid(api_key: str, from_email: str, to_email: str, subject: str, body: str) -> int:
+def send_via_resend(api_key: str, from_email: str, to_email: str, subject: str, body: str) -> int:
     payload = json.dumps(
         {
-            "personalizations": [{"to": [{"email": to_email}]}],
-            "from": {"email": from_email},
+            "from": from_email,
+            "to": [to_email],
             "subject": subject,
-            "content": [{"type": "text/plain", "value": body}],
+            "text": body,
         }
     ).encode("utf-8")
 
     req = urllib.request.Request(
-        "https://api.sendgrid.com/v3/mail/send",
+        "https://api.resend.com/emails",
         data=payload,
         method="POST",
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
+            "User-Agent": "TrialTracker/1.0",
         },
     )
     with urllib.request.urlopen(req, timeout=15) as resp:
@@ -478,7 +479,7 @@ def send_due_reminders(app: Flask) -> int:
     if not to_send:
         return 0
 
-    api_key = app.config.get("SENDGRID_API_KEY")
+    api_key = app.config.get("RESEND_API_KEY")
     from_email = app.config.get("MAIL_FROM")
 
     if not api_key or not from_email:
@@ -506,7 +507,7 @@ def send_due_reminders(app: Flask) -> int:
         body = "\n".join(lines)
 
         try:
-            status = send_via_sendgrid(api_key, from_email, owner.email, subject, body)
+            status = send_via_resend(api_key, from_email, owner.email, subject, body)
         except Exception:
             # This user's send failed; leave their reminder flag unset so it
             # retries next run, and continue on to the remaining users.

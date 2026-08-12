@@ -16,7 +16,7 @@ It's a free multi-user hosted app: anyone can create an account, add their own S
 ### 1. Prerequisites
 
 - **Python 3.10+**
-- A SendGrid account (reminders send via SendGrid's HTTPS Mail Send API, not SMTP — outbound SMTP is blocked on many hosting plans, including Railway's free/hobby tier)
+- A Resend account with a verified sending domain (reminders send via Resend's HTTPS API, not SMTP — outbound SMTP is blocked on many hosting plans, including Railway's free/hobby tier)
 
 ### 2. Setup (local)
 
@@ -48,7 +48,7 @@ It's a free multi-user hosted app: anyone can create an account, add their own S
 
    - **SECRET_KEY**: any long random string.
    - **DATABASE_URL**: optional locally — leave unset to use a local SQLite file (`trialtracker.db`), or point at Postgres to match production.
-   - **SENDGRID_API_KEY / MAIL_FROM** for your SendGrid account (operator-configured; individual users never see or set these).
+   - **RESEND_API_KEY / MAIL_FROM** for your Resend account (operator-configured; individual users never see or set these). `MAIL_FROM` must be on a domain verified in Resend.
    - **REMINDER_TASK_TOKEN**: generate a long random token (used to secure the reminder endpoint).
 
 5. **Run the app**:
@@ -99,7 +99,7 @@ The app exposes a small internal task endpoint, authenticated with a bearer toke
 When this endpoint is called:
 
 - It checks the database for trials that are exactly 7 or 1 days from expiry.
-- It sends emails (via SendGrid's HTTPS API) for any that have not yet received that specific reminder.
+- It sends emails (via Resend's HTTPS API) for any that have not yet received that specific reminder.
 - It marks the reminder as sent so you don’t get duplicates.
 
 To run reminders automatically:
@@ -113,7 +113,7 @@ To run reminders automatically:
 3. **Add a Postgres database** to the project (Railway → New → Database → PostgreSQL). Railway automatically injects `DATABASE_URL` into your service — you don't need to set it by hand.
 4. Set the remaining environment variables in the **Variables** tab:
    - `SECRET_KEY` — long random string. Required; the app refuses to start without it unless `FLASK_ENV=development`.
-   - `SENDGRID_API_KEY`, `MAIL_FROM`
+   - `RESEND_API_KEY`, `MAIL_FROM`
    - `REMINDER_TASK_TOKEN` — long random token
    - `FLASK_ENV=production` (or leave unset — production is the default)
 5. Railway installs from `requirements.txt` (including `psycopg2-binary` for Postgres) and starts the app via `Procfile` / `railway.json`:
@@ -132,7 +132,7 @@ To run reminders automatically:
 2. Upload all files from this folder into the Replit project.
 3. In Replit’s **Secrets** panel, add:
    - `SECRET_KEY`
-   - `SENDGRID_API_KEY`, `MAIL_FROM`
+   - `RESEND_API_KEY`, `MAIL_FROM`
    - `REMINDER_TASK_TOKEN`
 4. Make sure the run command is something like:
 
@@ -159,5 +159,5 @@ To run reminders automatically:
 - Session cookies are `HttpOnly`, `SameSite=Lax`, and `Secure` outside of development.
 - POST requests require a per-session CSRF token embedded in each form.
 - The `/tasks/run-reminders` endpoint requires the `REMINDER_TASK_TOKEN` as an `Authorization: Bearer` header (never a query string), and the token is never rendered into any page HTML.
-- Keep your `.env` file and SendGrid/database credentials private — never commit them.
+- Keep your `.env` file and Resend/database credentials private — never commit them.
 

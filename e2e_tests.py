@@ -4,9 +4,9 @@ End-to-end + isolation tests for TrialTracker's multi-user conversion.
 Run against a live server (BASE_URL) for the HTTP-level flows (register,
 login, CRUD, cross-user isolation, CSV export). The reminder-selection /
 duplicate-prevention / failure-isolation behavior is exercised directly
-against send_due_reminders() in-process, with send_via_sendgrid monkeypatched,
+against send_due_reminders() in-process, with send_via_resend monkeypatched,
 because that lets us assert exactly which recipients got which message
-without needing a real SendGrid account.
+without needing a real Resend account.
 
 Usage:
     python app.py                 # in one terminal (FLASK_ENV=development)
@@ -301,17 +301,17 @@ def main() -> None:
     from app import Trial, User, app as flask_app, db, send_due_reminders
     import app as app_module
 
-    sendgrid_calls = []
-    sendgrid_fail_for = set()
+    resend_calls = []
+    resend_fail_for = set()
 
-    def fake_send_via_sendgrid(api_key, from_email, to_email, subject, body):
-        if to_email in sendgrid_fail_for:
-            raise RuntimeError(f"Simulated SendGrid failure for {to_email}")
-        sendgrid_calls.append({"to": to_email, "subject": subject, "from": from_email})
+    def fake_send_via_resend(api_key, from_email, to_email, subject, body):
+        if to_email in resend_fail_for:
+            raise RuntimeError(f"Simulated Resend failure for {to_email}")
+        resend_calls.append({"to": to_email, "subject": subject, "from": from_email})
         return 202
 
     with flask_app.app_context():
-        flask_app.config["SENDGRID_API_KEY"] = "test-fake-key"
+        flask_app.config["RESEND_API_KEY"] = "test-fake-key"
         flask_app.config["MAIL_FROM"] = "notifications@example.com"
 
         user_a = User.query.filter_by(email=user_a_email).first()
@@ -326,33 +326,33 @@ def main() -> None:
         zoom.reminder_1_sent = False
         db.session.commit()
 
-        sendgrid_calls.clear()
-        sendgrid_fail_for.clear()
-        original_send = app_module.send_via_sendgrid
-        app_module.send_via_sendgrid = fake_send_via_sendgrid
+        resend_calls.clear()
+        resend_fail_for.clear()
+        original_send = app_module.send_via_resend
+        app_module.send_via_resend = fake_send_via_resend
         try:
             sent = send_due_reminders(flask_app)
         finally:
-            app_module.send_via_sendgrid = original_send
+            app_module.send_via_resend = original_send
 
         assert sent == 2, f"Expected 2 reminders sent, got {sent}"
-        recipients = {m["to"] for m in sendgrid_calls}
+        recipients = {m["to"] for m in resend_calls}
         assert recipients == {user_a_email, user_b_email}, (
             f"Reminder recipients mismatch: {recipients}"
         )
-        spotify_msg = next(m for m in sendgrid_calls if m["to"] == user_a_email)
-        zoom_msg = next(m for m in sendgrid_calls if m["to"] == user_b_email)
+        spotify_msg = next(m for m in resend_calls if m["to"] == user_a_email)
+        zoom_msg = next(m for m in resend_calls if m["to"] == user_b_email)
         assert "Spotify" in spotify_msg["subject"] and "7 day" in spotify_msg["subject"]
         assert "Zoom" in zoom_msg["subject"] and "1 day" in zoom_msg["subject"]
-        print("TEST K PASSED (correct recipient/content per user via SendGrid HTTPS API)")
+        print("TEST K PASSED (correct recipient/content per user via Resend HTTPS API)")
 
         # TEST L: running again same-day must not re-send (flags already set)
-        sendgrid_calls.clear()
-        app_module.send_via_sendgrid = fake_send_via_sendgrid
+        resend_calls.clear()
+        app_module.send_via_resend = fake_send_via_resend
         try:
             sent_again = send_due_reminders(flask_app)
         finally:
-            app_module.send_via_sendgrid = original_send
+            app_module.send_via_resend = original_send
         assert sent_again == 0, f"Expected 0 duplicate reminders, got {sent_again}"
         print("TEST L PASSED (no duplicate reminders)")
 
@@ -361,14 +361,14 @@ def main() -> None:
         zoom.reminder_1_sent = False
         db.session.commit()
 
-        sendgrid_calls.clear()
-        sendgrid_fail_for.clear()
-        sendgrid_fail_for.add(user_a_email)  # simulate User A's send failing
-        app_module.send_via_sendgrid = fake_send_via_sendgrid
+        resend_calls.clear()
+        resend_fail_for.clear()
+        resend_fail_for.add(user_a_email)  # simulate User A's send failing
+        app_module.send_via_resend = fake_send_via_resend
         try:
             sent_mixed = send_due_reminders(flask_app)
         finally:
-            app_module.send_via_sendgrid = original_send
+            app_module.send_via_resend = original_send
 
         assert sent_mixed == 1, f"Expected only User B's reminder to succeed, got {sent_mixed}"
         db.session.refresh(spotify)
