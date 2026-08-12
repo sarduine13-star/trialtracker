@@ -11,7 +11,7 @@
       </div>
 
       <div class="metric-card">
-        <div class="metric-label">Potential monthly spend if all trials convert</div>
+        <div class="metric-label">Potential monthly spend</div>
         <div class="metric-value">
           ${{ "%.2f"|format(total_monthly_cost or 0) }}
         </div>
@@ -47,9 +47,14 @@
             <header class="trial-header">
               <div>
                 <h2 class="trial-title">{{ trial.product_name }}</h2>
-                {% if trial.vendor %}
-                  <div class="trial-vendor">{{ trial.vendor }}</div>
-                {% endif %}
+                <div class="trial-vendor">
+                  {% if trial.kind == "subscription" %}
+                    Subscription · {{ "Yearly" if trial.billing_cycle == "yearly" else "Monthly" }}
+                  {% else %}
+                    Trial
+                  {% endif %}
+                  {% if trial.vendor %} · {{ trial.vendor }}{% endif %}
+                </div>
               </div>
               <div class="trial-badge">
                 {% if trial.days_remaining < 0 %}
@@ -68,11 +73,17 @@
 
             <div class="trial-body">
               <div class="trial-row">
-                <span class="label">Monthly cost if converted</span>
+                <span class="label">
+                  {% if trial.kind == "subscription" %}
+                    {{ "Yearly cost" if trial.billing_cycle == "yearly" else "Monthly cost" }}
+                  {% else %}
+                    Monthly cost if converted
+                  {% endif %}
+                </span>
                 <span class="value">${{ "%.2f"|format(trial.monthly_cost) }}</span>
               </div>
               <div class="trial-row">
-                <span class="label">Trial ends</span>
+                <span class="label">{{ "Renews" if trial.kind == "subscription" else "Trial ends" }}</span>
                 <span class="value">
                   {{ trial.trial_end_date.strftime("%b %d, %Y") if trial.trial_end_date else "" }}
                 </span>
@@ -98,6 +109,7 @@
                 method="post"
                 action="{{ url_for('delete_trial', trial_id=trial.id) }}"
               >
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                 <button
                   type="button"
                   class="btn btn-danger-sm"

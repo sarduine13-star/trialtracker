@@ -83,6 +83,26 @@ a {
   font-size: 0.8rem;
   color: #7e748f;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.footer-links {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.footer-links a {
+  color: #7e748f;
+  text-decoration: underline;
+}
+
+.footer-links a:hover {
+  color: #4b2a8a;
 }
 
 /* Buttons */
@@ -257,6 +277,35 @@ textarea:focus {
 .field-hint {
   font-size: 0.75rem;
   color: #8b7e9e;
+}
+
+.radio-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.radio-option {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 400;
+  font-size: 0.9rem;
+  color: #15111f;
+}
+
+select {
+  border-radius: 10px;
+  border: 1px solid rgba(148, 101, 233, 0.22);
+  padding: 0.5rem 0.6rem;
+  font-size: 0.9rem;
+  font-family: inherit;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+select:focus {
+  outline: 2px solid rgba(124, 58, 237, 0.35);
+  outline-offset: 1px;
 }
 
 .input-with-prefix {
@@ -464,6 +513,38 @@ textarea:focus {
   margin-bottom: 1rem;
   color: #6b6280;
   font-size: 0.9rem;
+}
+
+/* Legal / FAQ pages */
+.legal-card {
+  max-width: 640px;
+  text-align: left;
+}
+
+.legal-card h2 {
+  font-size: 1.05rem;
+  margin: 1.5rem 0 0.4rem;
+}
+
+.legal-card h2:first-of-type {
+  margin-top: 1.25rem;
+}
+
+.legal-card p,
+.legal-card ul {
+  font-size: 0.9rem;
+  color: #43325e;
+  line-height: 1.5;
+  margin: 0 0 0.5rem;
+}
+
+.legal-card ul {
+  padding-left: 1.25rem;
+}
+
+.legal-card a {
+  text-decoration: underline;
+  color: #4b2a8a;
 }
 
 /* Responsive tweaks */

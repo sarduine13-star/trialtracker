@@ -10,7 +10,43 @@
         Track one SaaS trial: we’ll calculate days remaining and include it in your potential monthly spend.
       </p>
 
-      <form method="post" class="form-grid">
+      <form method="post" class="form-grid" id="trial-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+
+        <div class="form-field form-field-full">
+          <label>Type</label>
+          <div class="radio-row">
+            <label class="radio-option">
+              <input
+                type="radio"
+                name="kind"
+                value="trial"
+                onchange="updateTrialFormLabels()"
+                {% if not trial or trial.kind != "subscription" %}checked{% endif %}
+              />
+              Trial
+            </label>
+            <label class="radio-option">
+              <input
+                type="radio"
+                name="kind"
+                value="subscription"
+                onchange="updateTrialFormLabels()"
+                {% if trial and trial.kind == "subscription" %}checked{% endif %}
+              />
+              Subscription
+            </label>
+          </div>
+        </div>
+
+        <div class="form-field" id="billing_cycle_field" style="display: none;">
+          <label for="billing_cycle">Billing recurrence</label>
+          <select id="billing_cycle" name="billing_cycle" onchange="updateTrialFormLabels()">
+            <option value="monthly" {% if trial and trial.billing_cycle == "monthly" %}selected{% endif %}>Monthly</option>
+            <option value="yearly" {% if trial and trial.billing_cycle == "yearly" %}selected{% endif %}>Yearly</option>
+          </select>
+        </div>
+
         <div class="form-field">
           <label for="product_name">Product name</label>
           <input
@@ -35,7 +71,7 @@
         </div>
 
         <div class="form-field">
-          <label for="monthly_cost">Monthly cost if you keep it</label>
+          <label for="monthly_cost" id="cost_label">Monthly cost if you keep it</label>
           <div class="input-with-prefix">
             <span class="prefix">$</span>
             <input
@@ -52,7 +88,7 @@
         </div>
 
         <div class="form-field">
-          <label for="trial_end_date">Trial end date</label>
+          <label for="trial_end_date" id="date_label">Trial end date</label>
           <input
             type="date"
             id="trial_end_date"
@@ -83,5 +119,28 @@
       </form>
     </div>
   </section>
+
+  <script>
+    function updateTrialFormLabels() {
+      const form = document.getElementById("trial-form");
+      const kind = form.querySelector('input[name="kind"]:checked').value;
+      const billingCycle = document.getElementById("billing_cycle").value;
+      const billingField = document.getElementById("billing_cycle_field");
+      const dateLabel = document.getElementById("date_label");
+      const costLabel = document.getElementById("cost_label");
+
+      if (kind === "subscription") {
+        billingField.style.display = "";
+        dateLabel.textContent = "Renewal date";
+        costLabel.textContent = billingCycle === "yearly" ? "Yearly cost" : "Monthly cost";
+      } else {
+        billingField.style.display = "none";
+        dateLabel.textContent = "Trial end date";
+        costLabel.textContent = "Monthly cost if you keep it";
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", updateTrialFormLabels);
+  </script>
 {% endblock %}
 

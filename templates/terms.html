@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="page-section">
+    <div class="card card-centered legal-card">
+      <h1 class="page-title">Terms of Service</h1>
+      <p class="page-lead">Last updated: August 2026</p>
+
+      <p>
+        TrialTracker is a free tool that helps you keep track of free trials
+        and recurring subscriptions, and reminds you by email before they end
+        or renew. By using TrialTracker, you agree to the following.
+      </p>
+
+      <h2>What TrialTracker is</h2>
+      <p>
+        TrialTracker is an organizational and reminder tool. It does not
+        cancel, modify, or manage your trials or subscriptions with any
+        third-party vendor, and it does not have access to your accounts
+        with those vendors. You remain solely responsible for cancelling,
+        downgrading, or managing any trial or subscription you track here.
+      </p>
+
+      <h2>Reminders are best-effort</h2>
+      <p>
+        Reminder emails are provided on a best-effort basis as a convenience.
+        They are not a guarantee that you won't be charged, and delivery can
+        be affected by factors outside our control (spam filtering, an
+        incorrect date entered, an email provider outage, etc.). Do not rely
+        on TrialTracker as your only safeguard against unwanted charges.
+      </p>
+
+      <h2>Your information</h2>
+      <p>
+        You're responsible for the accuracy of the information you enter,
+        including trial/subscription dates and costs, and for keeping your
+        account password secure.
+      </p>
+
+      <h2>Acceptable use</h2>
+      <p>
+        Don't use TrialTracker to store data you don't have the right to
+        store, attempt to access another account's data, interfere with the
+        service, or use it for any unlawful purpose. We may suspend or
+        terminate accounts that abuse the service.
+      </p>
+
+      <h2>Availability</h2>
+      <p>
+        TrialTracker is provided free of charge, "as is," without warranty
+        of any kind. We do not guarantee uninterrupted or error-free
+        availability, and features may change over time.
+      </p>
+
+      <h2>Limitation of liability</h2>
+      <p>
+        To the fullest extent permitted by law, TrialTracker and its
+        operator are not liable for any charges, losses, or damages arising
+        from your use of, or inability to use, the service — including a
+        missed or delayed reminder.
+      </p>
+
+      <h2>Account termination</h2>
+      <p>
+        You may stop using TrialTracker at any time and request deletion of
+        your account via the <a href="{{ url_for('contact') }}">Contact</a>
+        page. We may suspend or remove accounts that violate these terms.
+      </p>
+
+      <h2>Changes to these terms</h2>
+      <p>
+        These terms may be updated from time to time as the service evolves.
+      </p>
+    </div>
+  </section>
+{% endblock %}

@@ -7,11 +7,13 @@ It's a free multi-user hosted app: anyone can create an account, add their own S
 ### Features
 
 - **Accounts**: Register / log in / log out. Passwords are hashed; each account's data is isolated from every other account.
-- **Dashboard**: See all of your active trials with days remaining, urgency colors, and monthly cost.
-- **Total potential spend**: One number at the top showing monthly cost if all your trials convert.
-- **Email reminders**: Automatic emails 7 days and 1 day before each trial ends, sent to the account's own email.
-- **CSV export**: One‑click export of your trials to CSV.
-- **Edit & delete**: Update or remove your trials with confirmation.
+- **Trials & subscriptions**: Track a one-time free trial (end date) or a recurring subscription (monthly/yearly renewal date). Subscriptions automatically roll forward to their next renewal date once the current one passes, resetting reminder state for the new cycle.
+- **Dashboard**: See all of your active trials/subscriptions with days remaining, urgency colors, and cost.
+- **Potential monthly spend**: One number at the top showing monthly cost if all trials convert and subscriptions stay active (yearly subscriptions are converted to a monthly-equivalent for this total).
+- **Email reminders**: Automatic emails 7 days and 1 day before each trial ends or subscription renews, sent to the account's own email.
+- **CSV export**: One‑click export of your trials/subscriptions to CSV.
+- **Edit & delete**: Update or remove your trials/subscriptions with confirmation.
+- **Legal/support pages**: Privacy Policy, Terms of Service, FAQ, and Contact, linked from the footer.
 
 ### 1. Prerequisites
 
@@ -115,6 +117,7 @@ To run reminders automatically:
    - `SECRET_KEY` — long random string. Required; the app refuses to start without it unless `FLASK_ENV=development`.
    - `RESEND_API_KEY`, `MAIL_FROM`
    - `REMINDER_TASK_TOKEN` — long random token
+   - `CONTACT_EMAIL` — optional; shown on the public `/contact` page if set
    - `FLASK_ENV=production` (or leave unset — production is the default)
 5. Railway installs from `requirements.txt` (including `psycopg2-binary` for Postgres) and starts the app via `Procfile` / `railway.json`:
 

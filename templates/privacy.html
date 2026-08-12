@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="page-section">
+    <div class="card card-centered legal-card">
+      <h1 class="page-title">Privacy Policy</h1>
+      <p class="page-lead">Last updated: August 2026</p>
+
+      <p>
+        This page describes, in plain language, what TrialTracker actually collects,
+        why, and how it's handled. TrialTracker is a small, free tool for tracking
+        free trials and recurring subscriptions and sending you reminder emails
+        before they renew.
+      </p>
+
+      <h2>Information we collect</h2>
+      <ul>
+        <li><strong>Account information</strong>: the name, email address, and
+          password you provide when you register. Passwords are hashed and never
+          stored in plain text.</li>
+        <li><strong>Trial and subscription information you enter</strong>: product
+          name, vendor, cost, trial end date or renewal date, billing recurrence
+          (monthly or yearly), and any notes you add.</li>
+      </ul>
+      <p>We do not collect payment card details, and TrialTracker never connects to your bank or card accounts.</p>
+
+      <h2>How we use this information</h2>
+      <ul>
+        <li>To show you your own dashboard of trials and subscriptions.</li>
+        <li>To calculate potential monthly spend across what you've entered.</li>
+        <li>To send you automatic reminder emails 7 days and 1 day before a
+          trial ends or a subscription renews, to your account email address.</li>
+      </ul>
+      <p>
+        Each account can only see, edit, delete, or export its own data. We don't
+        use your information for advertising, and we don't sell or share it with
+        third parties for marketing purposes.
+      </p>
+
+      <h2>Email delivery</h2>
+      <p>
+        Reminder emails are sent through Resend, a transactional email provider,
+        using our verified sending domain. Resend processes the email address,
+        subject, and message body needed to deliver that one email.
+      </p>
+
+      <h2>Hosting and storage</h2>
+      <p>
+        The application and its PostgreSQL database are hosted on Railway.
+        Data you enter is stored in that database for as long as your account
+        exists.
+      </p>
+
+      <h2>Sessions and cookies</h2>
+      <p>
+        TrialTracker uses a single session cookie to keep you logged in and to
+        protect forms against cross-site request forgery. This cookie is
+        essential to the app working and is not used for advertising or
+        cross-site tracking. We do not use analytics or advertising cookies.
+      </p>
+
+      <h2>Basic server logging</h2>
+      <p>
+        Our hosting provider (Railway) keeps standard runtime logs (such as
+        request/response status) for operating and debugging the service.
+        We do not maintain a separate analytics or tracking system.
+      </p>
+
+      <h2>Data retention and deletion</h2>
+      <p>
+        Your data is retained for as long as your account exists. You can
+        delete individual trials or subscriptions at any time from your
+        dashboard. To request deletion of your entire account and its data,
+        see the <a href="{{ url_for('contact') }}">Contact</a> page.
+      </p>
+
+      <h2>Changes to this policy</h2>
+      <p>
+        If how TrialTracker handles data changes, this page will be updated
+        to reflect that.
+      </p>
+    </div>
+  </section>
+{% endblock %}

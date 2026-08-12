@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="page-section">
+    <div class="card card-centered legal-card">
+      <h1 class="page-title">Contact</h1>
+
+      {% if contact_email %}
+        <p>
+          For support, questions, or to request deletion of your account
+          and data, email
+          <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.
+        </p>
+      {% else %}
+        <p>
+          A dedicated support email isn't listed here yet. In the meantime,
+          you can remove any trial or subscription yourself from your
+          dashboard, and account/data deletion requests can be sent once a
+          support address is published on this page.
+        </p>
+      {% endif %}
+    </div>
+  </section>
+{% endblock %}

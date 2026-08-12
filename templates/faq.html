@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="page-section">
+    <div class="card card-centered legal-card">
+      <h1 class="page-title">FAQ</h1>
+
+      <h2>What is TrialTracker?</h2>
+      <p>
+        TrialTracker is a simple dashboard that helps you keep track of free
+        trials and recurring subscriptions, so you know what's about to
+        renew and don't get surprised by a charge.
+      </p>
+
+      <h2>Is it free?</h2>
+      <p>Yes, TrialTracker is free to use.</p>
+
+      <h2>Can I track normal subscriptions as well as free trials?</h2>
+      <p>
+        Yes. When adding an item you choose either <strong>Trial</strong>
+        (a one-time end date) or <strong>Subscription</strong> (recurring
+        monthly or yearly). Subscriptions automatically roll forward to
+        their next renewal date once the current one passes.
+      </p>
+
+      <h2>When are reminders sent?</h2>
+      <p>
+        You'll get an email 7 days before, and again 1 day before, a trial
+        ends or a subscription renews. Each reminder is only sent once per
+        billing cycle.
+      </p>
+
+      <h2>Does TrialTracker cancel subscriptions for me?</h2>
+      <p>
+        No. TrialTracker only tracks dates and sends reminders — it doesn't
+        connect to any vendor account, and it can't cancel or modify a trial
+        or subscription on your behalf. You stay in control of that.
+      </p>
+
+      <h2>What does "Potential Monthly Spend" mean?</h2>
+      <p>
+        It's the total monthly cost across everything on your dashboard if
+        every trial converted and every subscription stayed active. Yearly
+        subscriptions are converted to a monthly-equivalent (yearly cost
+        ÷ 12) for this total so it's a fair comparison across billing
+        cycles.
+      </p>
+
+      <h2>Is my information private?</h2>
+      <p>
+        Yes. Each account only ever sees its own trials and subscriptions.
+        See the <a href="{{ url_for('privacy') }}">Privacy Policy</a> for
+        details on what's collected and why.
+      </p>
+
+      <h2>Can I edit or delete a trial or subscription?</h2>
+      <p>
+        Yes — use Edit or Delete on any card on your dashboard at any time.
+      </p>
+
+      <h2>How do I contact TrialTracker or request deletion of my account data?</h2>
+      <p>
+        See the <a href="{{ url_for('contact') }}">Contact</a> page.
+      </p>
+    </div>
+  </section>
+{% endblock %}

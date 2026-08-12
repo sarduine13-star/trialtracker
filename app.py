@@ -1,3 +1,4 @@
+import calendar
 import csv
 import io
 import json
@@ -78,6 +79,11 @@ class Trial(db.Model):
     monthly_cost = db.Column(db.Float, nullable=False)
     trial_end_date = db.Column(db.String(10), nullable=False)  # YYYY-MM-DD
     notes = db.Column(db.Text)
+    # "trial" (one-time, non-renewing) or "subscription" (recurring).
+    # Existing rows default to "trial" so prior behavior is preserved.
+    kind = db.Column(db.String(20), nullable=False, default="trial", server_default="trial")
+    # "monthly" or "yearly"; only meaningful when kind == "subscription".
+    billing_cycle = db.Column(db.String(10))
     reminder_7_sent = db.Column(db.Boolean, nullable=False, default=False)
     reminder_1_sent = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -120,6 +126,7 @@ def create_app():
     app.config["MAIL_FROM"] = os.environ.get("MAIL_FROM", "")
 
     app.config["REMINDER_TASK_TOKEN"] = os.environ.get("REMINDER_TASK_TOKEN", "")
+    app.config["CONTACT_EMAIL"] = os.environ.get("CONTACT_EMAIL", "")
 
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
@@ -130,13 +137,88 @@ def create_app():
 
     with app.app_context():
         db.create_all()
+        run_additive_migrations()
 
     register_routes(app)
     return app
 
 
+def run_additive_migrations() -> None:
+    """Add newly introduced columns to an existing 'trials' table.
+
+    db.create_all() only creates missing tables, not missing columns on a
+    table that already exists in production. This adds any columns the
+    current model expects but the database doesn't have yet, without
+    touching existing rows/tables otherwise.
+    """
+    inspector = db.inspect(db.engine)
+    if "trials" not in inspector.get_table_names():
+        return
+
+    existing_columns = {col["name"] for col in inspector.get_columns("trials")}
+    with db.engine.begin() as conn:
+        if "kind" not in existing_columns:
+            conn.execute(
+                db.text(
+                    "ALTER TABLE trials ADD COLUMN kind VARCHAR(20) NOT NULL DEFAULT 'trial'"
+                )
+            )
+        if "billing_cycle" not in existing_columns:
+            conn.execute(db.text("ALTER TABLE trials ADD COLUMN billing_cycle VARCHAR(10)"))
+
+
 def normalize_email(raw_email: str) -> str:
     return raw_email.strip().lower()
+
+
+def add_months(d: date, months: int) -> date:
+    month_index = d.month - 1 + months
+    year = d.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(d.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
+
+
+def add_years(d: date, years: int) -> date:
+    try:
+        return d.replace(year=d.year + years)
+    except ValueError:
+        # Feb 29 landing on a non-leap year.
+        return d.replace(year=d.year + years, day=28)
+
+
+def advance_renewal_date(current: date, billing_cycle: str) -> date:
+    if billing_cycle == "yearly":
+        return add_years(current, 1)
+    return add_months(current, 1)
+
+
+def advance_due_subscriptions() -> None:
+    """Roll any subscription whose renewal date has passed forward to its
+    next upcoming renewal date, resetting reminder flags for the new cycle.
+
+    Trials are never advanced. Subscriptions more than one billing period
+    overdue (e.g. the app was down for a couple of months) are advanced
+    repeatedly until the renewal date is no longer in the past.
+    """
+    today = date.today()
+    overdue = Trial.query.filter(
+        Trial.kind == "subscription", Trial.trial_end_date < today.isoformat()
+    ).all()
+
+    changed = False
+    for trial in overdue:
+        end_date = datetime.strptime(trial.trial_end_date, "%Y-%m-%d").date()
+        billing_cycle = trial.billing_cycle or "monthly"
+        while end_date < today:
+            end_date = advance_renewal_date(end_date, billing_cycle)
+        trial.trial_end_date = end_date.strftime("%Y-%m-%d")
+        trial.reminder_7_sent = False
+        trial.reminder_1_sent = False
+        changed = True
+
+    if changed:
+        db.session.commit()
 
 
 def register_routes(app: Flask) -> None:
@@ -154,6 +236,23 @@ def register_routes(app: Flask) -> None:
         return session["_csrf_token"]
 
     app.jinja_env.globals["csrf_token"] = get_csrf_token
+
+    @app.route("/privacy")
+    def privacy():
+        return render_template("privacy.html", title="Privacy Policy")
+
+    @app.route("/terms")
+    def terms():
+        return render_template("terms.html", title="Terms of Service")
+
+    @app.route("/faq")
+    def faq():
+        return render_template("faq.html", title="FAQ")
+
+    @app.route("/contact")
+    def contact():
+        contact_email = app.config.get("CONTACT_EMAIL") or ""
+        return render_template("contact.html", title="Contact", contact_email=contact_email)
 
     @app.route("/register", methods=["GET", "POST"])
     def register():
@@ -222,6 +321,8 @@ def register_routes(app: Flask) -> None:
     @app.route("/")
     @login_required
     def dashboard():
+        advance_due_subscriptions()
+
         rows = Trial.query.filter_by(user_id=current_user.id).all()
 
         trials = []
@@ -232,7 +333,12 @@ def register_routes(app: Flask) -> None:
             end_date = datetime.strptime(row.trial_end_date, "%Y-%m-%d").date()
             days_remaining = (end_date - today).days
 
-            total_monthly_cost += float(row.monthly_cost)
+            cost = float(row.monthly_cost)
+            if row.kind == "subscription" and row.billing_cycle == "yearly":
+                monthly_equivalent = cost / 12
+            else:
+                monthly_equivalent = cost
+            total_monthly_cost += monthly_equivalent
 
             if days_remaining < 0:
                 urgency = "expired"
@@ -248,7 +354,9 @@ def register_routes(app: Flask) -> None:
                     "id": row.id,
                     "product_name": row.product_name,
                     "vendor": row.vendor,
-                    "monthly_cost": float(row.monthly_cost),
+                    "monthly_cost": cost,
+                    "kind": row.kind,
+                    "billing_cycle": row.billing_cycle,
                     "trial_end_date": end_date,
                     "days_remaining": days_remaining,
                     "notes": row.notes,
@@ -272,6 +380,13 @@ def register_routes(app: Flask) -> None:
         monthly_cost = request.form.get("monthly_cost", "").strip()
         trial_end_date = request.form.get("trial_end_date", "").strip()
         notes = request.form.get("notes", "").strip()
+        kind = request.form.get("kind", "trial").strip()
+        billing_cycle = request.form.get("billing_cycle", "").strip()
+
+        if kind not in ("trial", "subscription"):
+            kind = "trial"
+        if kind != "subscription":
+            billing_cycle = ""
 
         error = None
         if not product_name:
@@ -279,18 +394,20 @@ def register_routes(app: Flask) -> None:
         elif not monthly_cost:
             error = "Monthly cost is required."
         elif not trial_end_date:
-            error = "Trial end date is required."
+            error = "Date is required."
+        elif kind == "subscription" and billing_cycle not in ("monthly", "yearly"):
+            error = "Billing recurrence (Monthly or Yearly) is required for subscriptions."
 
         try:
             monthly_cost_value = float(monthly_cost)
         except ValueError:
-            error = "Monthly cost must be a number."
+            error = error or "Cost must be a number."
             monthly_cost_value = existing_cost if existing_cost is not None else 0.0
 
         try:
             datetime.strptime(trial_end_date, "%Y-%m-%d").date()
         except ValueError:
-            error = "Trial end date must be a valid date (YYYY-MM-DD)."
+            error = error or "Date must be a valid date (YYYY-MM-DD)."
 
         return {
             "product_name": product_name,
@@ -299,6 +416,8 @@ def register_routes(app: Flask) -> None:
             "monthly_cost_value": monthly_cost_value,
             "trial_end_date": trial_end_date,
             "notes": notes,
+            "kind": kind,
+            "billing_cycle": billing_cycle or None,
             "error": error,
         }
 
@@ -310,7 +429,20 @@ def register_routes(app: Flask) -> None:
 
             if form["error"]:
                 flash(form["error"], "error")
-                return render_template("add_edit_trial.html", title="Add Trial")
+                return render_template(
+                    "add_edit_trial.html",
+                    title="Add Trial",
+                    trial={
+                        "id": None,
+                        "product_name": form["product_name"],
+                        "vendor": form["vendor"],
+                        "monthly_cost": form["monthly_cost"],
+                        "trial_end_date": form["trial_end_date"],
+                        "notes": form["notes"],
+                        "kind": form["kind"],
+                        "billing_cycle": form["billing_cycle"],
+                    },
+                )
 
             trial = Trial(
                 user_id=current_user.id,
@@ -319,11 +451,16 @@ def register_routes(app: Flask) -> None:
                 monthly_cost=form["monthly_cost_value"],
                 trial_end_date=form["trial_end_date"],
                 notes=form["notes"],
+                kind=form["kind"],
+                billing_cycle=form["billing_cycle"],
             )
             db.session.add(trial)
             db.session.commit()
 
-            flash("Trial added.", "success")
+            flash(
+                "Subscription added." if form["kind"] == "subscription" else "Trial added.",
+                "success",
+            )
             return redirect(url_for("dashboard"))
 
         return render_template("add_edit_trial.html", title="Add Trial")
@@ -350,6 +487,8 @@ def register_routes(app: Flask) -> None:
                         "monthly_cost": form["monthly_cost"] or trial.monthly_cost,
                         "trial_end_date": form["trial_end_date"] or trial.trial_end_date,
                         "notes": form["notes"] or trial.notes,
+                        "kind": form["kind"],
+                        "billing_cycle": form["billing_cycle"],
                     },
                 )
 
@@ -358,9 +497,14 @@ def register_routes(app: Flask) -> None:
             trial.monthly_cost = form["monthly_cost_value"]
             trial.trial_end_date = form["trial_end_date"]
             trial.notes = form["notes"]
+            trial.kind = form["kind"]
+            trial.billing_cycle = form["billing_cycle"]
             db.session.commit()
 
-            flash("Trial updated.", "success")
+            flash(
+                "Subscription updated." if form["kind"] == "subscription" else "Trial updated.",
+                "success",
+            )
             return redirect(url_for("dashboard"))
 
         return render_template(
@@ -373,6 +517,8 @@ def register_routes(app: Flask) -> None:
                 "monthly_cost": trial.monthly_cost,
                 "trial_end_date": trial.trial_end_date,
                 "notes": trial.notes,
+                "kind": trial.kind,
+                "billing_cycle": trial.billing_cycle,
             },
         )
 
@@ -400,7 +546,16 @@ def register_routes(app: Flask) -> None:
         text_buffer = io.StringIO()
         writer = csv.writer(text_buffer)
         writer.writerow(
-            ["Product", "Vendor", "Monthly Cost", "Trial End Date", "Notes", "Created At"]
+            [
+                "Product",
+                "Vendor",
+                "Monthly Cost",
+                "Trial End Date",
+                "Notes",
+                "Created At",
+                "Type",
+                "Billing Cycle",
+            ]
         )
         for row in rows:
             writer.writerow(
@@ -411,6 +566,8 @@ def register_routes(app: Flask) -> None:
                     row.trial_end_date,
                     row.notes,
                     row.created_at.isoformat() if row.created_at else "",
+                    "Subscription" if row.kind == "subscription" else "Trial",
+                    (row.billing_cycle or "").capitalize(),
                 ]
             )
 
@@ -461,6 +618,8 @@ def send_via_resend(api_key: str, from_email: str, to_email: str, subject: str, 
 
 
 def send_due_reminders(app: Flask) -> int:
+    advance_due_subscriptions()
+
     today = date.today()
 
     candidates = Trial.query.filter(
@@ -491,19 +650,38 @@ def send_due_reminders(app: Flask) -> int:
         if owner is None:
             continue
 
-        subject = f"Trial ending in {days} day{'s' if days != 1 else ''}: {trial.product_name}"
-        lines = [
-            f"Hi {owner.name},",
-            "",
-            f"Your trial for {trial.product_name} is ending in {days} day{'s' if days != 1 else ''}.",
-            f"Vendor: {trial.vendor or 'N/A'}",
-            f"Monthly cost if converted: ${trial.monthly_cost:.2f}",
-            f"Trial end date: {trial.trial_end_date}",
-            "",
-            "Decide whether to keep, cancel, or downgrade so you're not surprised by charges.",
-            "",
-            "— TrialTracker",
-        ]
+        day_word = f"{days} day{'s' if days != 1 else ''}"
+        is_subscription = trial.kind == "subscription"
+
+        if is_subscription:
+            cost_label = "Yearly cost" if trial.billing_cycle == "yearly" else "Monthly cost"
+            subject = f"Renews in {day_word}: {trial.product_name}"
+            lines = [
+                f"Hi {owner.name},",
+                "",
+                f"Your subscription for {trial.product_name} renews in {day_word}.",
+                f"Vendor: {trial.vendor or 'N/A'}",
+                f"{cost_label}: ${trial.monthly_cost:.2f}",
+                f"Renewal date: {trial.trial_end_date}",
+                "",
+                "Decide whether to keep, cancel, or change your plan before it renews.",
+                "",
+                "— TrialTracker",
+            ]
+        else:
+            subject = f"Trial ending in {day_word}: {trial.product_name}"
+            lines = [
+                f"Hi {owner.name},",
+                "",
+                f"Your trial for {trial.product_name} is ending in {day_word}.",
+                f"Vendor: {trial.vendor or 'N/A'}",
+                f"Monthly cost if converted: ${trial.monthly_cost:.2f}",
+                f"Trial end date: {trial.trial_end_date}",
+                "",
+                "Decide whether to keep, cancel, or downgrade so you're not surprised by charges.",
+                "",
+                "— TrialTracker",
+            ]
         body = "\n".join(lines)
 
         try:
