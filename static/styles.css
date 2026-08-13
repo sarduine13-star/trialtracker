@@ -381,6 +381,7 @@ select:focus {
 
 .trial-card {
   background: rgba(255, 255, 255, 0.96);
+  color: #15111f;
   border-radius: 16px;
   padding: 1rem 1.1rem 0.8rem;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.07);
@@ -547,36 +548,102 @@ select:focus {
   color: #4b2a8a;
 }
 
-/* Landing page */
+/* Footer identity (shared across all pages) */
+.footer-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.footer-brand-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #2b2140;
+}
+
+.footer-brand-sub {
+  font-size: 0.78rem;
+  color: #7e748f;
+}
+
+/* Landing page (public marketing homepage only, scoped to body.landing-page) */
+body.landing-page {
+  background: #17121f;
+  color: #f5f2fb;
+}
+
+body.landing-page .app-header {
+  background: rgba(23, 18, 31, 0.92);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+body.landing-page .brand-title {
+  color: #f5f2fb;
+}
+
+body.landing-page .brand-subtitle {
+  color: #b3a6cf;
+}
+
+body.landing-page .nav-actions .btn-ghost {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ece6f7;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+body.landing-page .app-footer {
+  background: #120e19;
+  color: #b3a6cf;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  margin-top: 3rem;
+  padding-top: 1.75rem;
+  padding-bottom: 2rem;
+}
+
+body.landing-page .footer-links a {
+  color: #c7bcdd;
+}
+
+body.landing-page .footer-links a:hover {
+  color: #ffffff;
+}
+
+body.landing-page .footer-brand-title {
+  color: #f5f2fb;
+}
+
+/* Hero */
 .landing-hero {
   text-align: center;
-  max-width: 34rem;
-  margin: 1.5rem auto 0;
-  padding: 1.5rem 1rem;
+  max-width: 36rem;
+  margin: 0 auto;
+  padding: 3rem 1rem 2.5rem;
+}
+
+.landing-eyebrow {
+  margin: 0 0 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #b691f0;
 }
 
 .landing-title {
-  margin: 0 0 0.5rem;
-  font-size: 2.25rem;
+  margin: 0 0 0.75rem;
+  font-size: 2rem;
   font-weight: 700;
-  background: linear-gradient(135deg, #7c3aed, #a855f7);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-.landing-tagline {
-  margin: 0 0 0.5rem;
-  font-size: 1.15rem;
-  font-weight: 600;
-  color: #2b2140;
+  line-height: 1.25;
+  color: #f9f7fc;
 }
 
 .landing-subtext {
   margin: 0 auto 1.5rem;
-  font-size: 0.95rem;
-  color: #6b6280;
-  max-width: 28rem;
+  font-size: 1rem;
+  color: #cabfe1;
+  max-width: 30rem;
+  line-height: 1.55;
 }
 
 .landing-cta-row {
@@ -591,42 +658,117 @@ select:focus {
   font-size: 1rem;
 }
 
-.landing-free-note {
-  margin: 0.9rem 0 0;
+.btn-ghost-dark {
+  background: rgba(255, 255, 255, 0.06);
+  color: #f1ecf9;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.btn-ghost-dark:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.landing-trust-line {
+  margin: 1rem 0 0;
   font-size: 0.85rem;
-  color: #7e748f;
+  color: #a396c2;
   font-weight: 500;
 }
 
-.landing-benefits {
+/* Product preview - reuses real dashboard component classes (.metric-card,
+   .trials-grid, .trial-card, .badge, ...) framed in a dark panel so it reads
+   as the actual app rather than a mockup. */
+.landing-preview-section {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.landing-preview-frame {
+  background: #1e1730;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 1.5rem;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.35);
+}
+
+.landing-preview-heading {
+  margin-bottom: 1.25rem;
+}
+
+.landing-preview-label {
+  display: inline-block;
+  background: rgba(168, 85, 247, 0.18);
+  color: #dcc4fb;
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  border-radius: 999px;
+  padding: 0.2rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.landing-preview-caption {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: #9a8cb8;
+}
+
+.landing-preview-title {
+  margin: 0;
+  font-size: 1.15rem;
+  color: #f5f2fb;
+}
+
+/* Value panel */
+.landing-value-panel {
+  max-width: 960px;
+  margin: 0 auto;
+  background: #f4eefc;
+  border: 1px solid rgba(124, 58, 237, 0.12);
+  border-radius: 20px;
+  padding: 1.75rem;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1rem;
-  max-width: 960px;
-  margin: 2rem auto 0;
+  gap: 1.5rem;
 }
 
-.benefit-card h2 {
-  margin: 0 0 0.4rem;
-  font-size: 1.05rem;
-  color: #4c1d95;
+.landing-value-item {
+  border-left: 3px solid #7c3aed;
+  padding-left: 1rem;
 }
 
-.benefit-card p {
+.landing-value-tag {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6d28d9;
+  margin-bottom: 0.4rem;
+}
+
+.landing-value-item p {
   margin: 0;
-  font-size: 0.9rem;
-  color: #43325e;
-  line-height: 1.5;
+  font-size: 0.92rem;
+  color: #3a2d55;
+  line-height: 1.55;
 }
 
-.landing-steps {
+/* How it works (dark panel) */
+.landing-steps-dark {
   max-width: 640px;
+  margin: 0 auto;
   text-align: left;
+  background: #1e1730;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 1.75rem;
 }
 
 .landing-steps-title {
-  margin: 0 0 0.75rem;
+  margin: 0 0 1rem;
   font-size: 1.2rem;
+  color: #f5f2fb;
 }
 
 .landing-steps-list {
@@ -634,25 +776,60 @@ select:focus {
   padding-left: 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.6rem;
   font-size: 0.95rem;
-  color: #2b2140;
+  color: #d6cce9;
+  line-height: 1.55;
+}
+
+/* Account/data control panel */
+.landing-account-panel {
+  max-width: 640px;
+  margin: 0 auto;
+  background: #f4eefc;
+  border: 1px solid rgba(124, 58, 237, 0.12);
+  border-radius: 20px;
+  padding: 1.75rem;
+  text-align: left;
+}
+
+.landing-account-panel h2 {
+  margin: 0 0 0.85rem;
+  font-size: 1.2rem;
+  color: #3a2160;
+}
+
+.landing-account-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.92rem;
+  color: #3a2d55;
   line-height: 1.5;
 }
 
+/* Final CTA */
 .landing-final-cta {
-  max-width: 540px;
+  max-width: 560px;
+  margin: 0 auto;
   text-align: center;
+  background: linear-gradient(160deg, #2a1f47, #1c1530);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  border-radius: 20px;
+  padding: 2.25rem 1.75rem;
 }
 
 .landing-final-cta h2 {
-  margin: 0 0 0.4rem;
-  font-size: 1.3rem;
+  margin: 0 0 0.5rem;
+  font-size: 1.35rem;
+  color: #f9f7fc;
 }
 
 .landing-final-cta p {
-  margin: 0 0 1.25rem;
-  color: #6b6280;
+  margin: 0 0 1.5rem;
+  color: #cabfe1;
   font-size: 0.95rem;
 }
 
@@ -691,8 +868,12 @@ select:focus {
     justify-content: space-between;
   }
 
+  .landing-hero {
+    padding: 2rem 0.25rem 1.75rem;
+  }
+
   .landing-title {
-    font-size: 1.8rem;
+    font-size: 1.65rem;
   }
 
   .landing-cta-row {
@@ -702,6 +883,18 @@ select:focus {
 
   .landing-cta-row .btn {
     width: 100%;
+  }
+
+  .landing-preview-frame,
+  .landing-value-panel,
+  .landing-steps-dark,
+  .landing-account-panel,
+  .landing-final-cta {
+    padding: 1.1rem;
+  }
+
+  .landing-preview-frame .page-header {
+    margin-bottom: 1rem;
   }
 }
 
