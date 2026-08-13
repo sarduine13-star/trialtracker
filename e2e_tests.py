@@ -166,7 +166,8 @@ def main() -> None:
     print("TEST B: Login User A")
     logout(session_a)
     resp = session_a.get("/")
-    assert "/login" in resp.geturl(), f"Expected redirect to /login when logged out, got {resp.geturl()}"
+    assert resp.status == 200, f"Expected public landing page (200) when logged out, got {resp.status}"
+    assert "/login" not in resp.geturl(), f"Anonymous / should not redirect, got {resp.geturl()}"
     login(session_a, user_a_email, "passwordA1")
     print("TEST B PASSED")
 
@@ -431,7 +432,7 @@ def main() -> None:
     print("TEST M: Logout protects private routes")
     logout(session_a)
     resp = session_a.get("/")
-    assert "/login" in resp.geturl(), f"Expected redirect to /login, got {resp.geturl()}"
+    assert resp.status == 200, f"Expected public landing page (200) when logged out, got {resp.status}"
     html = read(resp)
     assert "Netflix" not in html, "Private trial data visible after logout"
 

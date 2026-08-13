@@ -319,8 +319,13 @@ def register_routes(app: Flask) -> None:
         return redirect(url_for("login"))
 
     @app.route("/")
-    @login_required
     def dashboard():
+        if not current_user.is_authenticated:
+            return render_template(
+                "landing.html",
+                title="TrialTracker — Free Trial & Subscription Reminder",
+            )
+
         advance_due_subscriptions()
 
         rows = Trial.query.filter_by(user_id=current_user.id).all()
