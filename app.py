@@ -324,6 +324,7 @@ def register_routes(app: Flask) -> None:
             return render_template(
                 "landing.html",
                 title="TrialTracker — Free Trial & Subscription Reminder",
+                landing_page=True,
             )
 
         advance_due_subscriptions()

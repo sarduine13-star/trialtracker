@@ -15,7 +15,7 @@
       href="{{ url_for('static', filename='styles.css') }}"
     />
   </head>
-  <body>
+  <body{% if landing_page %} class="landing-page"{% endif %}>
     <div class="app-shell">
       <header class="app-header">
         <div class="brand">
@@ -68,7 +68,10 @@
       </main>
 
       <footer class="app-footer">
-        <span>Built for individuals & small teams juggling SaaS trials.</span>
+        <div class="footer-brand">
+          <span class="footer-brand-title">TrialTracker</span>
+          <span class="footer-brand-sub">A Redwine Innovations product.</span>
+        </div>
         <nav class="footer-links">
           <a href="{{ url_for('faq') }}">FAQ</a>
           <a href="{{ url_for('privacy') }}">Privacy</a>
