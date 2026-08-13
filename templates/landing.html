@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block meta_description %}Track free trials and subscriptions, see upcoming renewal dates, and get reminders before charges hit. TrialTracker is free to use.{% endblock %}
+
+{% block content %}
+  <section class="landing-hero">
+    <h1 class="landing-title">TrialTracker</h1>
+    <p class="landing-tagline">Stop surprise subscription charges.</p>
+    <p class="landing-subtext">
+      Track free trials and subscriptions in one place and get reminded
+      before they renew.
+    </p>
+    <div class="landing-cta-row">
+      <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg">Start Free</a>
+      <a href="{{ url_for('login') }}" class="btn btn-ghost btn-lg">Log In</a>
+    </div>
+    <p class="landing-free-note">Free to use.</p>
+  </section>
+
+  <section class="page-section landing-benefits">
+    <div class="card benefit-card">
+      <h2>Know what's coming</h2>
+      <p>
+        See trial expiration and subscription renewal dates before they hit.
+      </p>
+    </div>
+    <div class="card benefit-card">
+      <h2>Get reminded</h2>
+      <p>
+        TrialTracker sends reminder emails before important renewal dates.
+      </p>
+    </div>
+    <div class="card benefit-card">
+      <h2>See what you're spending</h2>
+      <p>
+        Keep recurring costs visible instead of discovering them on a bank
+        statement.
+      </p>
+    </div>
+  </section>
+
+  <section class="page-section">
+    <div class="card card-centered landing-steps">
+      <h2 class="landing-steps-title">How it works</h2>
+      <ol class="landing-steps-list">
+        <li>Add a trial or subscription.</li>
+        <li>Enter the renewal/end date and cost.</li>
+        <li>TrialTracker keeps it organized and reminds you before the date arrives.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="page-section">
+    <div class="card card-centered landing-final-cta">
+      <h2>Stop forgetting about free trials.</h2>
+      <p>Start tracking them for free.</p>
+      <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg">Create Free Account</a>
+    </div>
+  </section>
+{% endblock %}

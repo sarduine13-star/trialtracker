@@ -547,6 +547,115 @@ select:focus {
   color: #4b2a8a;
 }
 
+/* Landing page */
+.landing-hero {
+  text-align: center;
+  max-width: 34rem;
+  margin: 1.5rem auto 0;
+  padding: 1.5rem 1rem;
+}
+
+.landing-title {
+  margin: 0 0 0.5rem;
+  font-size: 2.25rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #7c3aed, #a855f7);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.landing-tagline {
+  margin: 0 0 0.5rem;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #2b2140;
+}
+
+.landing-subtext {
+  margin: 0 auto 1.5rem;
+  font-size: 0.95rem;
+  color: #6b6280;
+  max-width: 28rem;
+}
+
+.landing-cta-row {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.btn-lg {
+  padding: 0.65rem 1.5rem;
+  font-size: 1rem;
+}
+
+.landing-free-note {
+  margin: 0.9rem 0 0;
+  font-size: 0.85rem;
+  color: #7e748f;
+  font-weight: 500;
+}
+
+.landing-benefits {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  max-width: 960px;
+  margin: 2rem auto 0;
+}
+
+.benefit-card h2 {
+  margin: 0 0 0.4rem;
+  font-size: 1.05rem;
+  color: #4c1d95;
+}
+
+.benefit-card p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #43325e;
+  line-height: 1.5;
+}
+
+.landing-steps {
+  max-width: 640px;
+  text-align: left;
+}
+
+.landing-steps-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.2rem;
+}
+
+.landing-steps-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  color: #2b2140;
+  line-height: 1.5;
+}
+
+.landing-final-cta {
+  max-width: 540px;
+  text-align: center;
+}
+
+.landing-final-cta h2 {
+  margin: 0 0 0.4rem;
+  font-size: 1.3rem;
+}
+
+.landing-final-cta p {
+  margin: 0 0 1.25rem;
+  color: #6b6280;
+  font-size: 0.95rem;
+}
+
 /* Responsive tweaks */
 @media (max-width: 720px) {
   .app-header {
@@ -580,6 +689,19 @@ select:focus {
   .toolbar-left,
   .toolbar-right {
     justify-content: space-between;
+  }
+
+  .landing-title {
+    font-size: 1.8rem;
+  }
+
+  .landing-cta-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .landing-cta-row .btn {
+    width: 100%;
   }
 }
 
