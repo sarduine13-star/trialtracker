@@ -1,5 +1,58 @@
 {% extends "base.html" %}
 
+{% block meta_description %}Answers about TrialTracker, the free web app for tracking free trials, subscriptions, renewal dates, costs, and reminder emails.{% endblock %}
+{% block canonical_url %}https://trytrialtracker.com/faq{% endblock %}
+{% block structured_data %}
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is TrialTracker?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "TrialTracker is a simple dashboard that helps you keep track of free trials and recurring subscriptions, so you know what's about to renew and don't get surprised by a charge."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is TrialTracker free?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. TrialTracker is free to use."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I track normal subscriptions as well as free trials?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. You can track one-time free trials and recurring monthly or yearly subscriptions."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "When are TrialTracker reminders sent?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "TrialTracker sends an email 7 days before and again 1 day before a trial ends or a subscription renews."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does TrialTracker cancel subscriptions for me?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. TrialTracker tracks dates and sends reminders, but it does not connect to vendor accounts or cancel subscriptions on your behalf."
+        }
+      }
+    ]
+  }
+  </script>
+{% endblock %}
+
 {% block content %}
   <section class="page-section">
     <div class="card card-centered legal-card">
