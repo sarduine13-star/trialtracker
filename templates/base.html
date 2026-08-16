@@ -4,7 +4,17 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="{% block meta_description %}Track free trials and subscriptions, see upcoming renewal dates, and get reminded before charges hit. TrialTracker is free to use.{% endblock %}" />
+    <meta name="robots" content="{% block meta_robots %}index, follow, max-snippet:-1, max-image-preview:large{% endblock %}" />
     <title>{{ title or "TrialTracker" }}</title>
+    <link rel="canonical" href="{% block canonical_url %}{{ request.base_url }}{% endblock %}" />
+    <meta property="og:site_name" content="TrialTracker" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="{% block og_title %}{{ title or 'TrialTracker' }}{% endblock %}" />
+    <meta property="og:description" content="{% block og_description %}Track free trials and subscriptions, see upcoming renewal dates, and get reminders before charges hit. TrialTracker is free to use.{% endblock %}" />
+    <meta property="og:url" content="{{ request.base_url }}" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="{{ title or 'TrialTracker' }}" />
+    <meta name="twitter:description" content="Track free trials and subscriptions, see upcoming renewal dates, and get reminders before charges hit. TrialTracker is free to use." />
     <link
       rel="icon"
       type="image/png"
@@ -14,6 +24,7 @@
       rel="stylesheet"
       href="{{ url_for('static', filename='styles.css') }}"
     />
+    {% block structured_data %}{% endblock %}
   </head>
   <body{% if landing_page %} class="landing-page"{% endif %}>
     <div class="app-shell">
