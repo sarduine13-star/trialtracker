@@ -1,5 +1,6 @@
 import calendar
 import csv
+import hashlib
 import io
 import json
 import os
@@ -31,6 +32,7 @@ from flask_login import (
     logout_user,
 )
 from flask_sqlalchemy import SQLAlchemy
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -39,6 +41,8 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "trialtracker.db"
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+PASSWORD_RESET_SALT = "password-reset"
+PASSWORD_RESET_MAX_AGE_SECONDS = 3600
 
 db = SQLAlchemy()
 login_manager = LoginManager()
@@ -169,6 +173,44 @@ def run_additive_migrations() -> None:
 
 def normalize_email(raw_email: str) -> str:
     return raw_email.strip().lower()
+
+
+def _password_reset_serializer(app: Flask) -> URLSafeTimedSerializer:
+    return URLSafeTimedSerializer(app.config["SECRET_KEY"], salt=PASSWORD_RESET_SALT)
+
+
+def _password_fingerprint(password_hash: str) -> str:
+    return hashlib.sha256(password_hash.encode("utf-8")).hexdigest()[:16]
+
+
+def generate_password_reset_token(app: Flask, user: "User") -> str:
+    """Sign a time-limited token binding this reset link to the user's
+    current password hash, so resetting the password (or requesting a
+    fresh link) invalidates any older outstanding link automatically,
+    without needing a separate token table.
+    """
+    payload = {"uid": user.id, "pwfp": _password_fingerprint(user.password_hash)}
+    return _password_reset_serializer(app).dumps(payload)
+
+
+def verify_password_reset_token(app: Flask, token: str):
+    """Return the User the token was issued for, or None if the token is
+    missing, tampered, expired, or has already been used (the bound
+    password fingerprint no longer matches the user's current hash).
+    """
+    try:
+        payload = _password_reset_serializer(app).loads(
+            token, max_age=PASSWORD_RESET_MAX_AGE_SECONDS
+        )
+    except (BadSignature, SignatureExpired):
+        return None
+
+    user = db.session.get(User, payload.get("uid"))
+    if user is None:
+        return None
+    if not secrets.compare_digest(_password_fingerprint(user.password_hash), payload.get("pwfp", "")):
+        return None
+    return user
 
 
 def add_months(d: date, months: int) -> date:
@@ -310,6 +352,55 @@ def register_routes(app: Flask) -> None:
             return redirect(url_for("dashboard"))
 
         return render_template("login.html", title="Log in")
+
+    @app.route("/forgot-password", methods=["GET", "POST"])
+    def forgot_password():
+        if current_user.is_authenticated:
+            return redirect(url_for("dashboard"))
+
+        if request.method == "POST":
+            email = normalize_email(request.form.get("email", ""))
+            user = User.query.filter_by(email=email).first()
+            if user is not None:
+                token = generate_password_reset_token(app, user)
+                reset_url = url_for("reset_password", token=token, _external=True)
+                send_password_reset_email(app, user, reset_url)
+
+            flash(
+                "If an account exists for that email address, a password reset link has been sent.",
+                "success",
+            )
+            return redirect(url_for("login"))
+
+        return render_template("forgot_password.html", title="Forgot password")
+
+    @app.route("/reset-password/<token>", methods=["GET", "POST"])
+    def reset_password(token):
+        user = verify_password_reset_token(app, token)
+        if user is None:
+            flash("This password reset link is invalid or has expired.", "error")
+            return redirect(url_for("forgot_password"))
+
+        if request.method == "POST":
+            password = request.form.get("password", "")
+            confirm_password = request.form.get("confirm_password", "")
+
+            error = None
+            if len(password) < 8:
+                error = "Password must be at least 8 characters."
+            elif password != confirm_password:
+                error = "Passwords do not match."
+
+            if error:
+                flash(error, "error")
+                return render_template("reset_password.html", title="Reset password", token=token)
+
+            user.set_password(password)
+            db.session.commit()
+            flash("Your password has been reset. Please log in.", "success")
+            return redirect(url_for("login"))
+
+        return render_template("reset_password.html", title="Reset password", token=token)
 
     @app.route("/logout", methods=["POST"])
     @login_required
@@ -590,6 +681,32 @@ def register_routes(app: Flask) -> None:
             download_name="trials.csv",
         )
 
+    @app.route("/account")
+    @login_required
+    def account():
+        return render_template("account.html", title="Account")
+
+    @app.route("/account/delete", methods=["POST"])
+    @login_required
+    def delete_account():
+        password = request.form.get("password", "")
+        confirm_deletion = request.form.get("confirm_deletion")
+
+        if not confirm_deletion:
+            flash("You must confirm that you understand this action is permanent.", "error")
+            return redirect(url_for("account"))
+
+        if not current_user.check_password(password):
+            flash("Incorrect password. Your account was not deleted.", "error")
+            return redirect(url_for("account"))
+
+        user = db.session.get(User, current_user.id)
+        db.session.delete(user)
+        db.session.commit()
+        logout_user()
+        flash("Your TrialTracker account and all associated data have been deleted.", "success")
+        return redirect(url_for("dashboard"))
+
     @app.route("/tasks/run-reminders")
     def run_reminders():
         expected_token = app.config.get("REMINDER_TASK_TOKEN") or ""
@@ -624,6 +741,38 @@ def send_via_resend(api_key: str, from_email: str, to_email: str, subject: str, 
     )
     with urllib.request.urlopen(req, timeout=15) as resp:
         return resp.status
+
+
+def send_password_reset_email(app: Flask, user: "User", reset_url: str) -> None:
+    api_key = app.config.get("RESEND_API_KEY")
+    from_email = app.config.get("MAIL_FROM")
+    if not api_key or not from_email:
+        return
+
+    subject = "Reset your TrialTracker password"
+    lines = [
+        f"Hi {user.name},",
+        "",
+        "We received a request to reset your TrialTracker password.",
+        "",
+        f"Reset your password: {reset_url}",
+        "",
+        f"This link expires in {PASSWORD_RESET_MAX_AGE_SECONDS // 60} minutes.",
+        "",
+        "If you didn't request this, you can safely ignore this email —",
+        "your password will not be changed.",
+        "",
+        "— TrialTracker",
+    ]
+    body = "\n".join(lines)
+
+    try:
+        send_via_resend(api_key, from_email, user.email, subject, body)
+    except Exception:
+        # Best-effort: the forgot-password response is always generic
+        # regardless of transport success, so there is nothing to surface
+        # to the requester here.
+        pass
 
 
 def send_due_reminders(app: Flask) -> int:

@@ -29,6 +29,7 @@
           {% if current_user.is_authenticated %}
             <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">Dashboard</a>
             <a href="{{ url_for('add_trial') }}" class="btn btn-primary">Add trial</a>
+            <a href="{{ url_for('account') }}" class="btn btn-ghost">Account</a>
             <form
               method="post"
               action="{{ url_for('logout') }}"

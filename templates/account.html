@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="page-section">
+    <div class="card card-centered">
+      <h1 class="page-title">Account</h1>
+      <p class="page-lead">
+        {{ current_user.name }} &middot; {{ current_user.email }}
+      </p>
+    </div>
+  </section>
+
+  <section class="page-section">
+    <div class="card card-centered legal-card">
+      <h2>Delete Account</h2>
+      <p>
+        Deleting your account permanently removes your TrialTracker account
+        and all of your trial and subscription records. This cannot be
+        undone.
+      </p>
+
+      <form method="post" action="{{ url_for('delete_account') }}" class="form-grid">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+
+        <div class="form-field form-field-full">
+          <label for="password">Current password</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            placeholder="Enter your current password"
+            required
+          />
+        </div>
+
+        <div class="form-field form-field-full">
+          <label class="radio-option">
+            <input type="checkbox" name="confirm_deletion" value="yes" required />
+            I understand this permanently deletes my account and all of my trial data.
+          </label>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-danger-sm">Delete Account</button>
+        </div>
+      </form>
+    </div>
+  </section>
+{% endblock %}
