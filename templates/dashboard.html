@@ -63,6 +63,8 @@
                   <span class="badge badge-critical">Renews today</span>
                 {% elif trial.days_remaining == 1 %}
                   <span class="badge badge-critical">1 day left</span>
+                {% elif trial.days_remaining == 2 %}
+                  <span class="badge badge-critical">2 days left</span>
                 {% elif trial.days_remaining <= 7 %}
                   <span class="badge badge-warning">{{ trial.days_remaining }} days left</span>
                 {% else %}

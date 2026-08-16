@@ -501,7 +501,10 @@ def register_routes(app: Flask) -> None:
             trial.product_name = form["product_name"]
             trial.vendor = form["vendor"]
             trial.monthly_cost = form["monthly_cost_value"]
-            trial.trial_end_date = form["trial_end_date"]
+            if form["trial_end_date"] != trial.trial_end_date:
+                trial.trial_end_date = form["trial_end_date"]
+                trial.reminder_7_sent = False
+                trial.reminder_1_sent = False
             trial.notes = form["notes"]
             trial.kind = form["kind"]
             trial.billing_cycle = form["billing_cycle"]
