@@ -1,14 +1,42 @@
 {% extends "base.html" %}
 
-{% block meta_description %}Track free trials and subscriptions, see upcoming renewal dates, and get reminders before charges hit. TrialTracker is free to use.{% endblock %}
+{% block meta_description %}TrialTracker is a free web app for tracking free trials and subscriptions, renewal dates, costs, and email reminders before charges hit.{% endblock %}
+{% block canonical_url %}https://trytrialtracker.com/{% endblock %}
+{% block og_title %}TrialTracker — Free Trial & Subscription Reminder{% endblock %}
+{% block og_description %}Free web app for tracking free trials and subscriptions, renewal dates, costs, and reminder emails before charges hit.{% endblock %}
+{% block structured_data %}
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "TrialTracker",
+    "url": "https://trytrialtracker.com/",
+    "applicationCategory": "FinanceApplication",
+    "operatingSystem": "Web",
+    "description": "TrialTracker is a free web app for tracking free trials and recurring subscriptions, renewal dates, costs, and email reminders before important renewal dates.",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "featureList": [
+      "Track free trial end dates",
+      "Track monthly and yearly subscriptions",
+      "Email reminders before renewals and trial expirations",
+      "View upcoming renewal dates and potential monthly spend",
+      "Export account entries as CSV"
+    ]
+  }
+  </script>
+{% endblock %}
 
 {% block content %}
   <section class="landing-hero">
     <p class="landing-eyebrow">TrialTracker</p>
     <h1 class="landing-title">Know what renews before it charges you.</h1>
     <p class="landing-subtext">
-      Track free trials and subscriptions, see what is coming up next, and
-      get reminder emails before important renewal dates.
+      TrialTracker is a free web app for tracking free trials and subscriptions,
+      seeing what is coming up next, and getting reminder emails before important renewal dates.
     </p>
     <div class="landing-cta-row">
       <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg">Start Free</a>
